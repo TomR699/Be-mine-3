@@ -5,7 +5,7 @@ import { Character, HER, HIM } from './character.js';
 import { Input, Player, FollowCamera } from './controls.js';
 import { makeProp, makeHalo, makeGlow, makeFlowerField, makeLamp } from './props.js';
 import { GATE_REQUIREMENT } from './memories.js';
-import { Ending, makeGate, makeFireflies } from './ending.js';
+import { Ending, makeGate, makeFireflies, makeTownLights } from './ending.js';
 import { EffectComposer } from '../vendor/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from '../vendor/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from '../vendor/addons/postprocessing/UnrealBloomPass.js';
@@ -86,7 +86,9 @@ function paintSky(dusk) {
 }
 paintSky(0);
 
-scene.fog = new THREE.Fog(horizon.clone(), 70, 210);
+// Far enough that the whole island is visible from the lookout — the view
+// down over the valley is the point of standing up there.
+scene.fog = new THREE.Fog(horizon.clone(), 115, 340);
 
 const hemi = new THREE.HemisphereLight(0xbfd9ef, 0x6a7560, 1.15);
 scene.add(hemi);
@@ -187,6 +189,11 @@ const fireflies = makeFireflies(
   26
 );
 scene.add(fireflies.points);
+
+// The valley below the lookout, lit up. This is the view she should get when
+// she reaches the top at dusk.
+const townLights = makeTownLights(world.grid, world.lookout, SEA);
+scene.add(townLights.points);
 
 // --- input & player -----------------------------------------------------
 const input = new Input(renderer.domElement);
@@ -384,6 +391,7 @@ function frame() {
 
   ui.prompt.hidden = !nearest || noteOpen || journalOpen || ending.locksInput;
   fireflies.update(t, dusk);
+  townLights.update(t, dusk);
 
   if (input.consumeInteract() && !noteOpen && !journalOpen && !ending.locksInput && nearest) {
     markFound(nearest);
@@ -398,4 +406,4 @@ renderer.domElement.focus();
 frame();
 
 // Expose a little for tuning from the console during the build.
-window.BM = { world, player, input, scene, found, ending, gate, GATE_REQUIREMENT, SEA, nodeObjects, markFound, checkGate };
+window.BM = { world, player, input, scene, found, ending, gate, townLights, GATE_REQUIREMENT, SEA, nodeObjects, markFound, checkGate };

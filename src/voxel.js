@@ -247,8 +247,11 @@ export function addWaves(material) {
       shader.vertexShader.replace(
         '#include <begin_vertex>',
         `#include <begin_vertex>
-         transformed.y += sin(uTime * 0.9 + position.x * 0.42 + position.z * 0.31) * 0.055
-                        + sin(uTime * 0.5 + position.x * 0.13) * 0.035;`
+         // Displace downward only. Adding height lets the surface rise through
+         // the sand at the shoreline, which shows up as blue shards on the beach.
+         float swell = sin(uTime * 0.9 + position.x * 0.42 + position.z * 0.31) * 0.5 + 0.5;
+         float slow  = sin(uTime * 0.45 + position.x * 0.13) * 0.5 + 0.5;
+         transformed.y -= swell * 0.05 + slow * 0.03;`
       );
     ref = shader;
   };

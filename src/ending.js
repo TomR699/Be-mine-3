@@ -355,3 +355,58 @@ export function makeFireflies(count, centre, radius) {
     },
   };
 }
+
+/**
+ * Town lights scattered across the low ground, so the view from the lookout at
+ * dusk is a valley full of them. They fade up as the sky darkens, the way a
+ * town does when you're standing on a hill watching it get dark.
+ */
+export function makeTownLights(grid, keepAway, sea) {
+  const pts = [];
+  const cols = [];
+  const warm = [
+    new THREE.Color(0xffd9a0), new THREE.Color(0xfff0cf),
+    new THREE.Color(0xffbe73), new THREE.Color(0xcfe2ff),
+  ];
+
+  for (let x = 2; x < grid.sx - 2; x += 2) {
+    for (let z = 2; z < grid.sz - 2; z += 2) {
+      const h = grid.columnTop(x, z);
+      if (h <= sea + 1 || h > 18) continue;
+      if (Math.hypot(x - keepAway.x, z - keepAway.z) < 26) continue;
+
+      // Clump them: towns, not an even sprinkle.
+      const clump = Math.sin(x * 0.11) * Math.cos(z * 0.09) + Math.sin(z * 0.17) * 0.6;
+      const density = clump > 0.55 ? 0.5 : (clump > 0.1 ? 0.09 : 0.012);
+      if (Math.random() > density) continue;
+
+      pts.push(x + Math.random(), h + 1 + Math.random() * 1.6, z + Math.random());
+      const c = warm[(Math.random() * warm.length) | 0];
+      cols.push(c.r, c.g, c.b);
+    }
+  }
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3));
+
+  const mat = new THREE.PointsMaterial({
+    size: 0.5, vertexColors: true, transparent: true, opacity: 0,
+    depthWrite: false, blending: THREE.AdditiveBlending, sizeAttenuation: true,
+    // Distant lights are the whole point; fogging them out defeats it.
+    fog: false,
+  });
+
+  const points = new THREE.Points(geo, mat);
+  points.frustumCulled = false;
+
+  return {
+    points,
+    count: pts.length / 3,
+    update(t, dusk) {
+      // They only exist once it is dark enough to see them.
+      const v = Math.max(0, (dusk - 0.3) / 0.7);
+      mat.opacity = v * (0.85 + Math.sin(t * 1.7) * 0.04);
+    },
+  };
+}
