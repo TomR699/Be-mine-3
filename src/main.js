@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { generate, SEA } from './world.js';
-import { buildMeshes } from './voxel.js';
+import { buildMeshes, addWind } from './voxel.js';
 import { Character, HER, HIM } from './character.js';
 import { Input, Player, FollowCamera } from './controls.js';
 import { makeProp, makeHalo, makeGlow, makeFlowerField, makeLamp } from './props.js';
@@ -29,14 +29,45 @@ const renderer = new THREE.WebGLRenderer({
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+// Filmic response instead of a linear clip: highlights roll off rather than
+// blowing out, which is what stops the lit faces reading as flat paint.
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.12;
 
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(58, 1, 0.1, 500);
 
-const SKY_DAY = new THREE.Color(0x8fc3e8);
-const SKY_DUSK = new THREE.Color(0x54406b);
-scene.background = SKY_DAY.clone();
-scene.fog = new THREE.Fog(SKY_DAY.clone(), 60, 190);
+// Sky: a vertical gradient baked to a small texture, redrawn as dusk falls.
+// Cheaper than a shader dome and it goes through colour management for free.
+const SKY_TOP_DAY = new THREE.Color(0x4f9ed6);
+const SKY_BOT_DAY = new THREE.Color(0xbfe0f0);
+const SKY_TOP_DUSK = new THREE.Color(0x2d2450);
+const SKY_BOT_DUSK = new THREE.Color(0xe08a63);
+
+const skyCanvas = document.createElement('canvas');
+skyCanvas.width = 4; skyCanvas.height = 128;
+const skyCtx = skyCanvas.getContext('2d');
+const skyTex = new THREE.CanvasTexture(skyCanvas);
+skyTex.colorSpace = THREE.SRGBColorSpace;
+skyTex.mapping = THREE.EquirectangularReflectionMapping;
+scene.background = skyTex;
+
+const horizon = new THREE.Color();
+function paintSky(dusk) {
+  const top = SKY_TOP_DAY.clone().lerp(SKY_TOP_DUSK, dusk);
+  const bot = SKY_BOT_DAY.clone().lerp(SKY_BOT_DUSK, dusk);
+  const grad = skyCtx.createLinearGradient(0, 0, 0, skyCanvas.height);
+  grad.addColorStop(0, '#' + top.getHexString());
+  grad.addColorStop(0.52, '#' + bot.clone().lerp(top, 0.35).getHexString());
+  grad.addColorStop(1, '#' + bot.getHexString());
+  skyCtx.fillStyle = grad;
+  skyCtx.fillRect(0, 0, skyCanvas.width, skyCanvas.height);
+  skyTex.needsUpdate = true;
+  horizon.copy(bot);
+}
+paintSky(0);
+
+scene.fog = new THREE.Fog(horizon.clone(), 70, 210);
 
 const hemi = new THREE.HemisphereLight(0xbfd9ef, 0x6a7560, 1.15);
 scene.add(hemi);
@@ -59,6 +90,13 @@ const world = generate();
 const meshes = buildMeshes(world.grid);
 scene.add(meshes.opaque);
 if (meshes.water) scene.add(meshes.water);
+
+// Foliage is meshed separately so it can move in the wind.
+let advanceWind = () => {};
+if (meshes.foliage) {
+  scene.add(meshes.foliage);
+  advanceWind = addWind(meshes.foliage.material, 0.11);
+}
 scene.add(makeFlowerField(world.flowers));
 
 // memory props
@@ -209,6 +247,7 @@ addEventListener('resize', resize);
 resize();
 
 const clock = new THREE.Clock();
+let paintedDusk = 0;
 let nearest = null;
 
 function frame() {
@@ -233,14 +272,18 @@ function frame() {
   sun.position.set(player.pos.x + 45, player.pos.y + 70, player.pos.z + 28);
   sun.target.position.copy(player.pos);
 
+  advanceWind(t);
+
   // Dusk deepens as she remembers more.
   const dusk = found.size / Math.max(1, world.nodes.length);
-  const sky = SKY_DAY.clone().lerp(SKY_DUSK, dusk * 0.85);
-  scene.background.copy(sky);
-  scene.fog.color.copy(sky);
+  if (Math.abs(dusk - paintedDusk) > 0.005) {
+    paintedDusk = dusk;
+    paintSky(dusk * 0.9);
+  }
+  scene.fog.color.copy(horizon);
   hemi.intensity = 1.15 - dusk * 0.45;
-  sun.intensity = 1.55 - dusk * 0.75;
-  sun.color.setHSL(0.09, 0.55, 0.62 - dusk * 0.12);
+  sun.intensity = 1.55 - dusk * 0.7;
+  sun.color.setHSL(0.09, 0.35 + dusk * 0.3, 0.62 - dusk * 0.1);
 
   // Find the closest unopened memory within reach.
   nearest = null;

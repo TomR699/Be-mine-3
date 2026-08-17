@@ -45,6 +45,9 @@ export const EMISSIVE = new Set([B.LAMP_ON]);
 
 export function isPassable(id) { return PASSABLE.has(id); }
 
+/** Does this block cast ambient occlusion onto its neighbours? */
+function occludes(id) { return id !== B.AIR && id !== B.WATER && id !== B.FLOWER; }
+
 export class Grid {
   constructor(sx, sy, sz) {
     this.sx = sx; this.sy = sy; this.sz = sz;
@@ -74,69 +77,142 @@ export class Grid {
   }
 }
 
-// Face order: +X, -X, +Y, -Y, +Z, -Z. Corners wound CCW seen from outside.
-// Side shading is deliberately shallow: the directional light already darkens
-// these faces, and stacking both crushes anything in shadow to black.
+/**
+ * Face order: +X, -X, +Y, -Y, +Z, -Z.
+ *
+ * Each face carries its normal, the two in-plane axes (u, v), its four corners
+ * wound CCW seen from outside, and the (du, dv) sign of each corner in that
+ * plane — which is what lets the mesher sample the right neighbours for
+ * ambient occlusion.
+ *
+ * Side shading is deliberately shallow: the directional light already darkens
+ * these faces, and stacking both crushes anything in shadow to black.
+ */
 const FACES = [
-  { dir: [1, 0, 0],  corners: [[1, 0, 0], [1, 1, 0], [1, 1, 1], [1, 0, 1]], shade: 0.86 },
-  { dir: [-1, 0, 0], corners: [[0, 0, 1], [0, 1, 1], [0, 1, 0], [0, 0, 0]], shade: 0.80 },
-  { dir: [0, 1, 0],  corners: [[0, 1, 0], [0, 1, 1], [1, 1, 1], [1, 1, 0]], shade: 1.00 },
-  { dir: [0, -1, 0], corners: [[0, 0, 1], [0, 0, 0], [1, 0, 0], [1, 0, 1]], shade: 0.62 },
-  { dir: [0, 0, 1],  corners: [[1, 0, 1], [1, 1, 1], [0, 1, 1], [0, 0, 1]], shade: 0.94 },
-  { dir: [0, 0, -1], corners: [[0, 0, 0], [0, 1, 0], [1, 1, 0], [1, 0, 0]], shade: 0.76 },
+  {
+    dir: [1, 0, 0], u: [0, 1, 0], v: [0, 0, 1], shade: 0.86,
+    corners: [[1, 0, 0], [1, 1, 0], [1, 1, 1], [1, 0, 1]],
+    signs: [[-1, -1], [1, -1], [1, 1], [-1, 1]],
+  },
+  {
+    dir: [-1, 0, 0], u: [0, 1, 0], v: [0, 0, 1], shade: 0.80,
+    corners: [[0, 0, 1], [0, 1, 1], [0, 1, 0], [0, 0, 0]],
+    signs: [[-1, 1], [1, 1], [1, -1], [-1, -1]],
+  },
+  {
+    dir: [0, 1, 0], u: [1, 0, 0], v: [0, 0, 1], shade: 1.00,
+    corners: [[0, 1, 0], [0, 1, 1], [1, 1, 1], [1, 1, 0]],
+    signs: [[-1, -1], [-1, 1], [1, 1], [1, -1]],
+  },
+  {
+    dir: [0, -1, 0], u: [1, 0, 0], v: [0, 0, 1], shade: 0.62,
+    corners: [[0, 0, 1], [0, 0, 0], [1, 0, 0], [1, 0, 1]],
+    signs: [[-1, 1], [-1, -1], [1, -1], [1, 1]],
+  },
+  {
+    dir: [0, 0, 1], u: [1, 0, 0], v: [0, 1, 0], shade: 0.94,
+    corners: [[1, 0, 1], [1, 1, 1], [0, 1, 1], [0, 0, 1]],
+    signs: [[1, -1], [1, 1], [-1, 1], [-1, -1]],
+  },
+  {
+    dir: [0, 0, -1], u: [1, 0, 0], v: [0, 1, 0], shade: 0.76,
+    corners: [[0, 0, 0], [0, 1, 0], [1, 1, 0], [1, 0, 0]],
+    signs: [[-1, -1], [-1, 1], [1, 1], [1, -1]],
+  },
 ];
 
+// Brightness for ambient-occlusion levels 0 (deepest crease) to 3 (open).
+const AO_LEVELS = [0.48, 0.68, 0.85, 1.0];
+
 /**
- * Build one merged mesh for all opaque blocks and one for water.
- * Only faces touching air (or a transparent block) are emitted, so the
- * interior of the terrain costs nothing.
+ * Classic voxel corner AO: a vertex is darkened by the two blocks flanking it
+ * in the face plane plus the one diagonally across. Two flanking blocks close
+ * the corner completely, which is why that case short-circuits to zero.
+ */
+function cornerAO(side1, side2, corner) {
+  if (side1 && side2) return 0;
+  return 3 - (side1 + side2 + corner);
+}
+
+/**
+ * Build merged meshes: one for terrain, one for foliage (so it can sway in
+ * the wind independently) and one for water. Only faces touching air are
+ * emitted, so the interior of the island costs nothing.
  */
 export function buildMeshes(grid) {
-  const opaque = { pos: [], norm: [], col: [], idx: [] };
-  const water = { pos: [], norm: [], col: [], idx: [] };
+  const solid = newBuf(), foliage = newBuf(), water = newBuf();
   const c = new THREE.Color();
-
-  const emit = (target, x, y, z, face, id, shade) => {
-    const base = target.pos.length / 3;
-    c.setHex(COLORS[id] ?? 0xff00ff);
-    const s = EMISSIVE.has(id) ? 1 : shade;
-    for (const [dx, dy, dz] of face.corners) {
-      target.pos.push(x + dx, y + dy, z + dz);
-      target.norm.push(face.dir[0], face.dir[1], face.dir[2]);
-      target.col.push(c.r * s, c.g * s, c.b * s);
-    }
-    target.idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
-  };
 
   for (let y = 0; y < grid.sy; y++) {
     for (let z = 0; z < grid.sz; z++) {
       for (let x = 0; x < grid.sx; x++) {
         const id = grid.get(x, y, z);
         if (id === B.AIR) continue;
+
         const isWater = id === B.WATER;
-        const target = isWater ? water : opaque;
+        const isLeaf = id === B.LEAF;
+        const target = isWater ? water : (isLeaf ? foliage : solid);
 
         for (const face of FACES) {
           const nx = x + face.dir[0], ny = y + face.dir[1], nz = z + face.dir[2];
           const n = grid.get(nx, ny, nz);
-          // Water only shows its surface against air; solids hide behind solids.
+
           if (isWater) {
             if (n !== B.AIR) continue;
-          } else {
-            if (n !== B.AIR && n !== B.WATER && n !== B.FLOWER) continue;
-            if (id === B.FLOWER && n === B.FLOWER) continue;
+          } else if (n !== B.AIR && n !== B.WATER) {
+            continue;
           }
-          emit(target, x, y, z, face, id, face.shade);
+
+          // Ambient occlusion per corner. Water skips it — a flat sea reads
+          // better without creases along every shoreline block.
+          const ao = [3, 3, 3, 3];
+          if (!isWater) {
+            for (let i = 0; i < 4; i++) {
+              const [du, dv] = face.signs[i];
+              const s1 = occludes(grid.get(
+                nx + face.u[0] * du, ny + face.u[1] * du, nz + face.u[2] * du));
+              const s2 = occludes(grid.get(
+                nx + face.v[0] * dv, ny + face.v[1] * dv, nz + face.v[2] * dv));
+              const cr = occludes(grid.get(
+                nx + face.u[0] * du + face.v[0] * dv,
+                ny + face.u[1] * du + face.v[1] * dv,
+                nz + face.u[2] * du + face.v[2] * dv));
+              ao[i] = cornerAO(s1 ? 1 : 0, s2 ? 1 : 0, cr ? 1 : 0);
+            }
+          }
+
+          c.setHex(COLORS[id] ?? 0xff00ff);
+          const shade = EMISSIVE.has(id) ? 1 : face.shade;
+          const base = target.pos.length / 3;
+
+          for (let i = 0; i < 4; i++) {
+            const [dx, dy, dz] = face.corners[i];
+            const k = shade * (EMISSIVE.has(id) ? 1 : AO_LEVELS[ao[i]]);
+            target.pos.push(x + dx, y + dy, z + dz);
+            target.norm.push(face.dir[0], face.dir[1], face.dir[2]);
+            target.col.push(c.r * k, c.g * k, c.b * k);
+          }
+
+          // Split the quad along the darker diagonal, or the AO gradient
+          // visibly kinks across the face.
+          if (ao[0] + ao[2] > ao[1] + ao[3]) {
+            target.idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
+          } else {
+            target.idx.push(base + 1, base + 2, base + 3, base + 1, base + 3, base);
+          }
         }
       }
     }
   }
 
   return {
-    opaque: toMesh(opaque, false),
+    opaque: toMesh(solid, false),
+    foliage: foliage.pos.length ? toMesh(foliage, false) : null,
     water: water.pos.length ? toMesh(water, true) : null,
   };
 }
+
+function newBuf() { return { pos: [], norm: [], col: [], idx: [] }; }
 
 function toMesh(d, transparent) {
   const geo = new THREE.BufferGeometry();
@@ -156,4 +232,28 @@ function toMesh(d, transparent) {
   mesh.castShadow = !transparent;
   mesh.receiveShadow = true;
   return mesh;
+}
+
+/**
+ * Make a material's vertices drift, so foliage reads as alive rather than
+ * moulded. Returns a function to advance time each frame.
+ */
+export function addWind(material, strength = 0.09) {
+  let ref = null;
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.uTime = { value: 0 };
+    shader.vertexShader =
+      'uniform float uTime;\n' +
+      shader.vertexShader.replace(
+        '#include <begin_vertex>',
+        `#include <begin_vertex>
+         float wind = sin(uTime * 1.4 + position.x * 0.32 + position.z * 0.21);
+         float gust = sin(uTime * 0.45 + position.x * 0.05) * 0.5 + 0.75;
+         transformed.x += wind * ${strength.toFixed(3)} * gust;
+         transformed.z += cos(uTime * 1.1 + position.z * 0.27) * ${(strength * 0.6).toFixed(3)} * gust;`
+      );
+    ref = shader;
+  };
+  material.needsUpdate = true;
+  return (t) => { if (ref) ref.uniforms.uTime.value = t; };
 }
