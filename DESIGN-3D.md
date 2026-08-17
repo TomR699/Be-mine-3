@@ -1,6 +1,6 @@
 # Addendum — Should it be 3D?
 
-Follow-up to [DESIGN.md](./DESIGN.md). Status: **recommendation, awaiting a call.**
+Follow-up to [DESIGN.md](./DESIGN.md). Status: **decided — full voxel, free camera.** See notes at the bottom.
 
 Short answer: 3D is very much possible, it doesn't break any of the constraints
 in the original proposal, and for the ending it's probably the better choice.
@@ -80,3 +80,24 @@ something she has to operate.
 
 P1 is the one to do first regardless — it's the milestone that proves the feel
 before any content goes in.
+
+---
+
+## Decision (settled)
+
+**Full voxel, and the camera is free.** Both of my hedges above were overruled,
+correctly:
+
+- **Full voxel over HD-2D.** Going all in on one visual language is more
+  coherent than mixing 3D terrain with flat sprites, and a voxel character
+  built from real geometry — with joints that actually rotate — carries a walk
+  cycle far better than a billboard. Hair and outfit colour still do the work
+  of making it her; see `HER` in `src/character.js`.
+- **The fixed camera is gone.** The caution behind it was that she might not be
+  a gamer. She is, so it doesn't apply. Free orbit, free zoom, running, jumping
+  and swimming all in. The world got bigger to suit.
+
+What survives from the original proposal unchanged: `memories.js` as the single
+content file, GitHub Pages hosting, no build step, no network calls, and the
+ending — including the second button being *"Ask me again out loud"* rather
+than a "No" that runs away.

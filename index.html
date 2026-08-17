@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Be Mine</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='14'>%F0%9F%92%97</text></svg>">
+<style>
+  :root {
+    --ink: #f4eff8;
+    --panel: rgba(24, 18, 34, 0.9);
+    --line: rgba(255, 255, 255, 0.14);
+    --accent: #ff6e92;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    --serif: Georgia, "Iowan Old Style", serif;
+  }
+
+  * { box-sizing: border-box; }
+
+  /* Layout rules below set display on these elements, which would otherwise
+     beat the hidden attribute and leave overlays stuck on top of the game. */
+  [hidden] { display: none !important; }
+
+  html, body {
+    margin: 0;
+    height: 100%;
+    overflow: hidden;
+    background: #0e0a16;
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+
+  #game {
+    display: block;
+    width: 100%;
+    height: 100%;
+    outline: none;
+    cursor: grab;
+  }
+  #game:active { cursor: grabbing; }
+
+  .hud {
+    position: fixed;
+    pointer-events: none;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7);
+  }
+
+  #counter {
+    top: 1.25rem;
+    left: 1.5rem;
+    font-family: var(--mono);
+    font-size: 0.8rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    opacity: 0.9;
+  }
+
+  #hint {
+    bottom: 1.25rem;
+    left: 1.5rem;
+    font-family: var(--mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    opacity: 0.5;
+    line-height: 1.9;
+  }
+
+  #prompt {
+    bottom: 22%;
+    left: 50%;
+    transform: translateX(-50%);
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    padding: 0.5rem 0.9rem;
+    animation: rise 0.18s ease-out;
+  }
+  #prompt kbd {
+    font-family: var(--mono);
+    background: rgba(255, 255, 255, 0.16);
+    border-radius: 2px;
+    padding: 0.1em 0.4em;
+    margin-right: 0.35em;
+  }
+
+  @keyframes rise {
+    from { opacity: 0; transform: translate(-50%, 6px); }
+    to   { opacity: 1; transform: translate(-50%, 0); }
+  }
+
+  .modal {
+    position: fixed;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    background: rgba(10, 7, 18, 0.55);
+    backdrop-filter: blur(3px);
+  }
+
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 2rem 2.25rem;
+    max-width: 34rem;
+    width: calc(100% - 3rem);
+    animation: pop 0.2s ease-out;
+  }
+
+  @keyframes pop {
+    from { opacity: 0; transform: translateY(10px) scale(0.985); }
+    to   { opacity: 1; transform: none; }
+  }
+
+  #note-when {
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin: 0 0 0.5rem;
+  }
+
+  #note-title {
+    font-family: var(--serif);
+    font-weight: 400;
+    font-size: 1.6rem;
+    line-height: 1.2;
+    margin: 0 0 0.9rem;
+  }
+
+  #note-text {
+    font-family: var(--serif);
+    font-size: 1.0625rem;
+    line-height: 1.65;
+    margin: 0 0 1.75rem;
+    opacity: 0.92;
+    white-space: pre-wrap;
+  }
+
+  button {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink);
+    background: transparent;
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    padding: 0.6rem 1.2rem;
+    cursor: pointer;
+  }
+  button:hover { border-color: var(--accent); color: var(--accent); }
+  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  #journal h2 {
+    font-family: var(--serif);
+    font-weight: 400;
+    font-size: 1.5rem;
+    margin: 0 0 1.25rem;
+  }
+  #journal-list {
+    list-style: none;
+    margin: 0 0 1.5rem;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+    max-height: 50vh;
+    overflow-y: auto;
+  }
+  #journal-list li {
+    font-size: 0.9rem;
+    padding-left: 1.4rem;
+    position: relative;
+  }
+  #journal-list li::before {
+    content: "○";
+    position: absolute;
+    left: 0;
+    opacity: 0.4;
+  }
+  #journal-list li.got::before { content: "●"; color: var(--accent); opacity: 1; }
+  #journal-list li.missing { opacity: 0.45; font-style: italic; }
+
+  #loading {
+    position: fixed;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    background: #0e0a16;
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    opacity: 0.7;
+  }
+
+  #nowebgl {
+    position: fixed;
+    inset: 0;
+    display: none;
+    place-items: center;
+    padding: 2rem;
+    text-align: center;
+    background: #0e0a16;
+    font-family: var(--serif);
+    line-height: 1.7;
+  }
+</style>
+</head>
+<body>
+
+<canvas id="game" tabindex="0"></canvas>
+
+<div id="counter" class="hud">0 / 0 remembered</div>
+
+<div id="hint" class="hud">
+  WASD or arrows to walk · shift to run · space to jump<br>
+  drag to look · scroll to zoom · E to look closer · esc for the journal
+</div>
+
+<div id="prompt" class="hud" hidden><kbd>E</kbd> look closer</div>
+
+<div id="note" class="modal" hidden>
+  <div class="card" role="dialog" aria-modal="true" aria-labelledby="note-title">
+    <p id="note-when"></p>
+    <h2 id="note-title"></h2>
+    <p id="note-text"></p>
+    <button id="note-close">Close</button>
+  </div>
+</div>
+
+<div id="journal" class="modal" hidden>
+  <div class="card" role="dialog" aria-modal="true" aria-labelledby="journal-heading">
+    <h2 id="journal-heading">The journal</h2>
+    <ul id="journal-list"></ul>
+    <button onclick="document.getElementById('journal').hidden = true">Close</button>
+  </div>
+</div>
+
+<div id="loading">Building the world…</div>
+
+<div id="nowebgl">
+  <p>This one needs WebGL, and this browser isn't giving us any.<br>
+  Try Chrome, Firefox, or Safari — or a different machine.</p>
+</div>
+
+<script type="importmap">
+{ "imports": { "three": "./vendor/three.module.min.js" } }
+</script>
+<script type="module">
+  try {
+    const probe = document.createElement('canvas');
+    if (!probe.getContext('webgl2') && !probe.getContext('webgl')) throw new Error('no webgl');
+    await import('./src/main.js');
+  } catch (err) {
+    console.error(err);
+    document.getElementById('loading').hidden = true;
+    document.getElementById('nowebgl').style.display = 'grid';
+  }
+</script>
+
+</body>
+</html>
