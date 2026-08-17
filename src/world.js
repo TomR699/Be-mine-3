@@ -67,9 +67,11 @@ export function generate() {
       const falloff = Math.max(0, 1 - Math.pow(d, 3.2));
       let h = Math.round((n * 0.75 + ridge) * 22 * falloff + 3);
 
-      // The lookout sits on a raised hill at the end of the path.
+      // The lookout is a mesa, not a gentle hill. The sides rise several
+      // blocks per step, which auto-step can't climb — so the carved path is
+      // the only way up, which is what gives the gate something to guard.
       const dl = Math.hypot(x - LOOKOUT.x, z - LOOKOUT.z);
-      if (dl < 20) h += Math.round(11 * Math.pow(Math.cos((dl / 20) * Math.PI * 0.5), 2));
+      if (dl < 17) h += Math.round(14 * Math.max(0, Math.min(1, (17 - dl) / 3.5)));
 
       height[x + z * SX] = Math.max(1, Math.min(SY - 8, h));
     }
@@ -77,9 +79,21 @@ export function generate() {
 
   // Flatten a corridor under the path so she never has to fight the terrain.
   const path = pathPoints();
+
+  // Limit how fast the path may rise or fall. Without this the ramp up the
+  // mesa would be a cliff and she'd simply be stuck at the bottom.
+  const pathH = path.map(([px, pz]) => height[Math.round(px) + Math.round(pz) * SX]);
+  for (let i = 1; i < pathH.length; i++) {
+    pathH[i] = Math.min(pathH[i], pathH[i - 1] + 0.5);
+  }
+  for (let i = pathH.length - 2; i >= 0; i--) {
+    pathH[i] = Math.min(pathH[i], pathH[i + 1] + 0.5);
+  }
+
   const pathMask = new Uint8Array(SX * SZ);
-  for (const [px, pz] of path) {
-    const h = height[(Math.round(px)) + Math.round(pz) * SX];
+  for (let pi = 0; pi < path.length; pi++) {
+    const [px, pz] = path[pi];
+    const h = Math.round(pathH[pi]);
     for (let dz = -4; dz <= 4; dz++) {
       for (let dx = -4; dx <= 4; dx++) {
         const x = Math.round(px) + dx, z = Math.round(pz) + dz;
@@ -87,9 +101,15 @@ export function generate() {
         const dist = Math.hypot(dx, dz);
         if (dist > 4) continue;
         const i = x + z * SX;
-        const blend = Math.max(0, 1 - dist / 4);
-        height[i] = Math.round(height[i] * (1 - blend * 0.85) + h * blend * 0.85);
-        if (dist <= 2.2) pathMask[i] = 1;
+        if (dist <= 2.2) {
+          // The tread itself is flat — a partial blend here leaves steps the
+          // slope limiter already ruled out.
+          height[i] = h;
+          pathMask[i] = 1;
+        } else {
+          const blend = Math.max(0, 1 - dist / 4);
+          height[i] = Math.round(height[i] * (1 - blend * 0.85) + h * blend * 0.85);
+        }
       }
     }
   }
@@ -144,12 +164,31 @@ export function generate() {
     lamps.push({ x: x + 0.5, y: h + 1, z: z + 0.5 });
   }
 
+  // The gate sits at the foot of the ramp, where the path starts climbing
+  // toward the mesa. Everything either side of it is cliff.
+  let gateIndex = path.length - 1;
+  for (let i = 0; i < path.length; i++) {
+    if (Math.hypot(path[i][0] - LOOKOUT.x, path[i][1] - LOOKOUT.z) < 17.5) {
+      gateIndex = i;
+      break;
+    }
+  }
+  const [gxf, gzf] = path[gateIndex];
+  const [axf, azf] = path[Math.min(path.length - 1, gateIndex + 6)];
+  const gate = {
+    x: Math.round(gxf) + 0.5,
+    z: Math.round(gzf) + 0.5,
+    y: Math.round(pathH[gateIndex]) + 1,
+    facing: Math.atan2(axf - gxf, azf - gzf),
+  };
+
   // A little pier at the spawn beach, so the start reads as a place.
   pier(grid, SPAWN.x - 6, SPAWN.z + 4);
 
   // Anchor each memory to real ground.
+  const usable = gateIndex - 6;
   const nodes = MEMORIES.map((m, i) => {
-    const anchor = path[Math.min(path.length - 8, 10 + i * Math.floor((path.length - 20) / MEMORIES.length))];
+    const anchor = path[Math.max(4, Math.round(8 + i * ((usable - 8) / MEMORIES.length)))];
     const x = Math.round(anchor[0]) - 3;
     const z = Math.round(anchor[1]) - 3;
     const h = grid.columnTop(x, z);
@@ -159,7 +198,7 @@ export function generate() {
     return { ...m, x: x + 0.5, y, z: z + 0.5, found: false };
   });
 
-  return { grid, height, lamps, nodes, flowers, spawn: SPAWN, lookout: LOOKOUT };
+  return { grid, height, lamps, nodes, flowers, gate, spawn: SPAWN, lookout: LOOKOUT };
 }
 
 function nearPath(mask, x, z, r) {

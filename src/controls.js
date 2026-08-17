@@ -95,6 +95,23 @@ export class Player {
     this.grounded = true;
     this.yaw = 0;
     this.speed = 0;
+    // Solid things that aren't blocks — currently just the gate.
+    this.barriers = [];
+  }
+
+  /** Oriented box barrier, tested in the barrier's own local space. */
+  inBarrier(x, z) {
+    for (const bar of this.barriers) {
+      if (bar.open) continue;
+      const dx = x - bar.x, dz = z - bar.z;
+      const c = Math.cos(bar.facing), s = Math.sin(bar.facing);
+      const lx = dx * c - dz * s;   // across the gate
+      const lz = dx * s + dz * c;   // along the path
+      if (Math.abs(lx) < bar.halfWidth + HALF && Math.abs(lz) < bar.halfDepth + HALF) {
+        return true;
+      }
+    }
+    return false;
   }
 
   solidAt(x, y, z) {
@@ -103,6 +120,7 @@ export class Player {
 
   // Does the box centred on (x, z) with feet at y overlap anything solid?
   blocked(x, y, z) {
+    if (this.inBarrier(x, z)) return true;
     const x0 = Math.floor(x - HALF), x1 = Math.floor(x + HALF);
     const z0 = Math.floor(z - HALF), z1 = Math.floor(z + HALF);
     const y0 = Math.floor(y + 0.02), y1 = Math.floor(y + HEIGHT - 0.02);

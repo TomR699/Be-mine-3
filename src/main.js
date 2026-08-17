@@ -1,10 +1,15 @@
 import * as THREE from 'three';
 import { generate, SEA } from './world.js';
-import { buildMeshes, addWind } from './voxel.js';
+import { buildMeshes, addWind, addWaves } from './voxel.js';
 import { Character, HER, HIM } from './character.js';
 import { Input, Player, FollowCamera } from './controls.js';
 import { makeProp, makeHalo, makeGlow, makeFlowerField, makeLamp } from './props.js';
 import { GATE_REQUIREMENT } from './memories.js';
+import { Ending, makeGate, makeFireflies } from './ending.js';
+import { EffectComposer } from '../vendor/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from '../vendor/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from '../vendor/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from '../vendor/addons/postprocessing/OutputPass.js';
 
 const SAVE_KEY = 'be-mine-3.save.v1';
 
@@ -19,6 +24,13 @@ const ui = {
   loading: document.getElementById('loading'),
   journal: document.getElementById('journal'),
   journalList: document.getElementById('journal-list'),
+  letterbox: document.getElementById('letterbox'),
+  line: document.getElementById('line'),
+  ask: document.getElementById('ask'),
+  question: document.getElementById('question'),
+  yes: document.getElementById('yes'),
+  other: document.getElementById('other'),
+  hint: document.getElementById('hint'),
 };
 
 // --- scene --------------------------------------------------------------
@@ -37,32 +49,39 @@ renderer.toneMappingExposure = 1.12;
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(58, 1, 0.1, 500);
 
-// Sky: a vertical gradient baked to a small texture, redrawn as dusk falls.
-// Cheaper than a shader dome and it goes through colour management for free.
+// Sky: an inverted dome with a vertex-coloured gradient, repainted as dusk
+// falls. A canvas texture set as scene.background was the obvious approach and
+// it does not reliably re-upload once the renderer has cached it — the fog
+// went orange while the sky stayed blue. Vertex colours always update.
 const SKY_TOP_DAY = new THREE.Color(0x4f9ed6);
 const SKY_BOT_DAY = new THREE.Color(0xbfe0f0);
-const SKY_TOP_DUSK = new THREE.Color(0x2d2450);
+const SKY_TOP_DUSK = new THREE.Color(0x241c46);
 const SKY_BOT_DUSK = new THREE.Color(0xe08a63);
+const SKY_R = 300;
 
-const skyCanvas = document.createElement('canvas');
-skyCanvas.width = 4; skyCanvas.height = 128;
-const skyCtx = skyCanvas.getContext('2d');
-const skyTex = new THREE.CanvasTexture(skyCanvas);
-skyTex.colorSpace = THREE.SRGBColorSpace;
-skyTex.mapping = THREE.EquirectangularReflectionMapping;
-scene.background = skyTex;
+const skyGeo = new THREE.SphereGeometry(SKY_R, 20, 14);
+const skyColors = new Float32Array(skyGeo.attributes.position.count * 3);
+skyGeo.setAttribute('color', new THREE.BufferAttribute(skyColors, 3));
+const skyMesh = new THREE.Mesh(skyGeo, new THREE.MeshBasicMaterial({
+  side: THREE.BackSide, vertexColors: true, fog: false, depthWrite: false,
+}));
+skyMesh.renderOrder = -1;
+scene.add(skyMesh);
 
 const horizon = new THREE.Color();
+const _skyC = new THREE.Color();
 function paintSky(dusk) {
   const top = SKY_TOP_DAY.clone().lerp(SKY_TOP_DUSK, dusk);
   const bot = SKY_BOT_DAY.clone().lerp(SKY_BOT_DUSK, dusk);
-  const grad = skyCtx.createLinearGradient(0, 0, 0, skyCanvas.height);
-  grad.addColorStop(0, '#' + top.getHexString());
-  grad.addColorStop(0.52, '#' + bot.clone().lerp(top, 0.35).getHexString());
-  grad.addColorStop(1, '#' + bot.getHexString());
-  skyCtx.fillStyle = grad;
-  skyCtx.fillRect(0, 0, skyCanvas.width, skyCanvas.height);
-  skyTex.needsUpdate = true;
+  const pos = skyGeo.attributes.position;
+  for (let i = 0; i < pos.count; i++) {
+    const h = Math.max(0, Math.min(1, (pos.getY(i) / SKY_R) * 1.35 + 0.32));
+    _skyC.copy(bot).lerp(top, h);
+    skyColors[i * 3] = _skyC.r;
+    skyColors[i * 3 + 1] = _skyC.g;
+    skyColors[i * 3 + 2] = _skyC.b;
+  }
+  skyGeo.attributes.color.needsUpdate = true;
   horizon.copy(bot);
 }
 paintSky(0);
@@ -85,6 +104,14 @@ sun.shadow.bias = -0.0012;
 scene.add(sun);
 scene.add(sun.target);
 
+// Bloom. Lantern heads, fireflies and the heart burst are additive, so this
+// is what turns them from bright pixels into light.
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.55, 0.75, 0.72);
+composer.addPass(bloom);
+composer.addPass(new OutputPass());
+
 // --- world --------------------------------------------------------------
 const world = generate();
 const meshes = buildMeshes(world.grid);
@@ -97,6 +124,10 @@ if (meshes.foliage) {
   scene.add(meshes.foliage);
   advanceWind = addWind(meshes.foliage.material, 0.11);
 }
+
+// The sea gets a slow swell, on the same trick.
+let advanceWater = () => {};
+if (meshes.water) advanceWater = addWaves(meshes.water.material);
 scene.add(makeFlowerField(world.flowers));
 
 // memory props
@@ -145,12 +176,30 @@ him.root.position.set(world.lookout.x + 0.5, lookoutTop + 1, world.lookout.z + 0
 him.root.rotation.y = Math.PI;
 scene.add(him.root);
 
+// --- the gate ------------------------------------------------------------
+const gate = makeGate(world.gate.x, world.gate.y, world.gate.z, world.gate.facing);
+scene.add(gate.group);
+
+// --- fireflies, which arrive with the dusk -------------------------------
+const fireflies = makeFireflies(
+  240,
+  new THREE.Vector3(world.gate.x - 6, world.gate.y - 1, world.gate.z + 4),
+  26
+);
+scene.add(fireflies.points);
+
 // --- input & player -----------------------------------------------------
 const input = new Input(renderer.domElement);
 const player = new Player(world.grid, world.spawn);
 player.spawnX = world.spawn.x + 0.5;
 player.spawnZ = world.spawn.z + 0.5;
 const follow = new FollowCamera(camera, world.grid);
+
+player.barriers.push({
+  x: world.gate.x, z: world.gate.z, facing: world.gate.facing,
+  halfWidth: 3.0, halfDepth: 0.55,
+  get open() { return gate.isOpen; },
+});
 
 // --- progress -----------------------------------------------------------
 let found = new Set();
@@ -193,10 +242,27 @@ function markFound(n, silent) {
     found.add(n.node.id);
     save();
     refreshCounter();
+    checkGate();
   }
 }
 
+// --- the ending ----------------------------------------------------------
+const ending = new Ending({
+  scene, camera, her, him, player, gate,
+  ui: {
+    letterbox: ui.letterbox, line: ui.line, ask: ui.ask,
+    question: ui.question, yes: ui.yes, other: ui.other,
+    hud: [ui.counter, ui.hint],
+  },
+  onRelease: () => { follow.initialised = false; },
+});
+
+function checkGate() {
+  if (found.size >= GATE_REQUIREMENT) ending.unlock();
+}
+
 refreshCounter();
+checkGate();
 
 // --- note panel ---------------------------------------------------------
 let noteOpen = false;
@@ -230,9 +296,21 @@ function toggleJournal() {
 }
 
 addEventListener('keydown', (e) => {
+  if (e.code === 'Space' && ending.locksInput) { ending.nudge(); return; }
+
+  // Rehearsal shortcut: jump to the ending with everything found. For your
+  // dry run, and for the unthinkable case of something going wrong in the room.
+  if (e.code === 'KeyE' && e.ctrlKey && e.shiftKey) {
+    nodeObjects.forEach((n) => { if (!n.node.found) markFound(n); });
+    const l = world.lookout;
+    player.pos.set(l.x + 0.5, world.grid.columnTop(l.x, l.z) + 1, l.z + 5);
+    player.vel.set(0, 0, 0);
+    return;
+  }
+
   if (e.code === 'Escape') {
     if (noteOpen) closeNote();
-    else toggleJournal();
+    else if (!ending.locksInput) toggleJournal();
   }
 });
 
@@ -240,6 +318,8 @@ addEventListener('keydown', (e) => {
 function resize() {
   const w = innerWidth, h = innerHeight;
   renderer.setSize(w, h, false);
+  composer.setSize(w, h);
+  bloom.setSize(w, h);
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
 }
@@ -257,22 +337,27 @@ function frame() {
 
   input.update(dt);
 
-  if (!noteOpen && !journalOpen) {
+  if (!noteOpen && !journalOpen && !ending.locksInput) {
     player.update(dt, input);
   }
+  gate.update(dt);
+  ending.update(dt, t);
+  ending.checkApproach();
 
   her.root.position.set(player.pos.x, player.pos.y, player.pos.z);
   her.faceTowards(player.yaw, dt);
   her.update(dt, noteOpen ? 0 : player.speed, player.grounded);
   him.update(dt, 0, true);
 
-  follow.update(dt, player.pos, input.orbit);
+  if (!ending.inControlOfCamera) follow.update(dt, player.pos, input.orbit);
+  skyMesh.position.copy(camera.position);
 
   // Sun follows the player so shadows stay sharp across a large world.
   sun.position.set(player.pos.x + 45, player.pos.y + 70, player.pos.z + 28);
   sun.target.position.copy(player.pos);
 
   advanceWind(t);
+  advanceWater(t);
 
   // Dusk deepens as she remembers more.
   const dusk = found.size / Math.max(1, world.nodes.length);
@@ -297,14 +382,15 @@ function frame() {
     if (d < best && dy < 3) { best = d; nearest = n; }
   }
 
-  ui.prompt.hidden = !nearest || noteOpen || journalOpen;
+  ui.prompt.hidden = !nearest || noteOpen || journalOpen || ending.locksInput;
+  fireflies.update(t, dusk);
 
-  if (input.consumeInteract() && !noteOpen && !journalOpen && nearest) {
+  if (input.consumeInteract() && !noteOpen && !journalOpen && !ending.locksInput && nearest) {
     markFound(nearest);
     openNote(nearest.node);
   }
 
-  renderer.render(scene, camera);
+  composer.render();
 }
 
 ui.loading.hidden = true;
@@ -312,4 +398,4 @@ renderer.domElement.focus();
 frame();
 
 // Expose a little for tuning from the console during the build.
-window.BM = { world, player, input, scene, found, GATE_REQUIREMENT, SEA };
+window.BM = { world, player, input, scene, found, ending, gate, GATE_REQUIREMENT, SEA, nodeObjects, markFound, checkGate };

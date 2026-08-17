@@ -235,6 +235,28 @@ function toMesh(d, transparent) {
 }
 
 /**
+ * A slow swell on the sea surface. Only the top face moves far enough to
+ * notice, which is all that's wanted — the shoreline shouldn't tear open.
+ */
+export function addWaves(material) {
+  let ref = null;
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.uTime = { value: 0 };
+    shader.vertexShader =
+      'uniform float uTime;\n' +
+      shader.vertexShader.replace(
+        '#include <begin_vertex>',
+        `#include <begin_vertex>
+         transformed.y += sin(uTime * 0.9 + position.x * 0.42 + position.z * 0.31) * 0.055
+                        + sin(uTime * 0.5 + position.x * 0.13) * 0.035;`
+      );
+    ref = shader;
+  };
+  material.needsUpdate = true;
+  return (t) => { if (ref) ref.uniforms.uTime.value = t; };
+}
+
+/**
  * Make a material's vertices drift, so foliage reads as alive rather than
  * moulded. Returns a function to advance time each frame.
  */

@@ -3,7 +3,7 @@
 A small voxel game. She plays as herself, walks an island built out of things
 you've done together, and finds you at the end of it.
 
-**Status: P1 complete.** The world, the character, the camera, and the memory
+**Status: P2 complete.** The world, the character, the camera, and the memory
 loop all work. The content is placeholder — see
 [what's left](#whats-left) below.
 
@@ -30,6 +30,8 @@ Any static server works. On GitHub Pages it just works, no configuration.
 | scroll | zoom |
 | `E` | look closer at a memory |
 | `Esc` | the journal of what she's found |
+| `Space` | during the ending, move to the next line |
+| `Ctrl`+`Shift`+`E` | rehearsal shortcut: find everything and jump to the ending |
 
 The camera is free — orbit, zoom, the lot.
 
@@ -45,6 +47,7 @@ src/
   character.js      the voxel character rig and walk cycle
   controls.js       input, player physics, the follow camera
   props.js          memory objects, lamps, flowers
+  ending.js         the gate, the cinematic, fireflies
   memories.js       >>> the content file — this is the one you write <<<
 ```
 
@@ -70,10 +73,26 @@ anchored to real ground along the path, with a halo while it's unfound. Opening
 one lights another lamp and pushes the sky further toward dusk, so the island
 gets warmer and darker the more she remembers.
 
+## The ending
+
+The lookout is a mesa with cliff sides, so the carved path is the only way up
+and the gate across it genuinely blocks — she cannot simply walk around it. It
+opens when she's found `GATE_REQUIREMENT` memories (`memories.js`, currently all
+but two).
+
+Past the gate she walks up alone. Within six metres of him the game takes over:
+control locks, letterbox bars come in, she walks the last two paces herself and
+turns to face him, and the camera drifts in closer with each line. Then the
+question, and two buttons — `Yes`, and `Ask me again out loud`, which is not a
+rejection but a hand-off to the room you're both sitting in. Yes gets a burst of
+hearts; the other releases control back and leaves you standing together.
+
+`Ctrl`+`Shift`+`E` jumps straight there with everything found. That's for your
+dry run — and for the unthinkable case of something going wrong in the moment.
+
 ## What's left
 
-- **P2** — the gate to the lookout, and the ending sequence
-- **P3** — zone-specific tilesets, richer dusk lighting
+- **P3** — zone-specific tilesets so the island reads as distinct places
 - **P4** — real content (see below)
 - **P5** — the dry run: deploy, then play it start to finish on the actual
   laptop, offline, before the day

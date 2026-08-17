@@ -188,6 +188,84 @@
   #journal-list li.got::before { content: "●"; color: var(--accent); opacity: 1; }
   #journal-list li.missing { opacity: 0.45; font-style: italic; }
 
+  /* --- the ending --- */
+  #letterbox { position: fixed; inset: 0; pointer-events: none; }
+  #letterbox .bar {
+    position: absolute;
+    left: 0; right: 0;
+    height: 11vh;
+    background: #0b0713;
+    animation: bars 1.1s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  #letterbox .top { top: 0; }
+  #letterbox .bottom { bottom: 0; }
+  /* The sky at dusk is pale, and the lines are white. Without this they sit
+     on top of a sunset and are barely readable. */
+  #letterbox .scrim {
+    position: absolute;
+    left: 0; right: 0; bottom: 11vh;
+    height: 34vh;
+    background: linear-gradient(to top, rgba(11, 7, 19, 0.72), rgba(11, 7, 19, 0));
+  }
+  @keyframes bars { from { height: 0; } to { height: 11vh; } }
+
+  body.cinematic #game { cursor: default; }
+
+  #line {
+    position: fixed;
+    left: 50%;
+    bottom: 24vh;
+    transform: translateX(-50%);
+    margin: 0;
+    width: min(40rem, calc(100% - 4rem));
+    text-align: center;
+    font-family: var(--serif);
+    font-size: clamp(1.25rem, 2.6vw, 1.9rem);
+    line-height: 1.5;
+    text-shadow: 0 2px 14px rgba(0, 0, 0, 0.85);
+    pointer-events: none;
+    opacity: 0;
+  }
+  #line.show { animation: lineIn 1s ease-out forwards; }
+  @keyframes lineIn {
+    from { opacity: 0; transform: translate(-50%, 10px); }
+    to   { opacity: 1; transform: translate(-50%, 0); }
+  }
+
+  #ask {
+    position: fixed;
+    left: 50%;
+    bottom: 20vh;
+    transform: translateX(-50%);
+    width: min(40rem, calc(100% - 4rem));
+    text-align: center;
+    animation: lineIn 1.2s ease-out;
+  }
+  #question {
+    font-family: var(--serif);
+    font-size: clamp(1.5rem, 3.4vw, 2.4rem);
+    line-height: 1.35;
+    margin: 0 0 2rem;
+    text-shadow: 0 2px 14px rgba(0, 0, 0, 0.85);
+    text-wrap: balance;
+  }
+  #ask .buttons {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+  #ask button {
+    font-size: 0.8rem;
+    padding: 0.85rem 2rem;
+    background: rgba(24, 18, 34, 0.75);
+    border-color: rgba(255, 255, 255, 0.3);
+  }
+  #ask #yes { border-color: var(--accent); color: var(--accent); }
+  #ask #yes:hover { background: var(--accent); color: #14101c; }
+  #ask .quiet { opacity: 0.75; }
+  #ask .quiet:hover { opacity: 1; }
+
   #loading {
     position: fixed;
     inset: 0;
@@ -241,6 +319,22 @@
     <h2 id="journal-heading">The journal</h2>
     <ul id="journal-list"></ul>
     <button onclick="document.getElementById('journal').hidden = true">Close</button>
+  </div>
+</div>
+
+<div id="letterbox" hidden>
+  <div class="bar top"></div>
+  <div class="bar bottom"></div>
+  <div class="scrim"></div>
+</div>
+
+<p id="line" hidden></p>
+
+<div id="ask" hidden>
+  <p id="question"></p>
+  <div class="buttons">
+    <button id="yes"></button>
+    <button id="other" class="quiet"></button>
   </div>
 </div>
 
