@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { generate, SEA, SX, SZ } from './world.js';
 import {
-  buildLowPolyTerrain, buildLowPolyWater, buildLowPolyTrees,
+  buildLowPolyTerrain, buildLowPolyTrees,
   makeGroundSampler, addTreeWind,
 } from './lowpoly.js';
 
@@ -15,6 +15,8 @@ import { makeProp, makeHalo, makeGlow, makeFlowerField, makeLamp } from './props
 import { makeSet, HERO_OFFSET } from './sets.js';
 import { GATE_REQUIREMENT } from './memories.js';
 import { Ending, makeGate, makeFireflies, makeTownLights, makeMeteors } from './ending.js';
+import { makeSky } from './sky.js';
+import { makeWater } from './water.js';
 import { EffectComposer } from '../vendor/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from '../vendor/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from '../vendor/addons/postprocessing/UnrealBloomPass.js';
@@ -59,46 +61,15 @@ renderer.toneMappingExposure = 1.12;
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(58, 1, 0.1, 500);
 
-// Sky: an inverted dome with a vertex-coloured gradient, repainted as dusk
-// falls. A canvas texture set as scene.background was the obvious approach and
-// it does not reliably re-upload once the renderer has cached it — the fog
-// went orange while the sky stayed blue. Vertex colours always update.
-const SKY_TOP_DAY = new THREE.Color(0x4f9ed6);
-const SKY_BOT_DAY = new THREE.Color(0xbfe0f0);
-const SKY_TOP_DUSK = new THREE.Color(0x241c46);
-const SKY_BOT_DUSK = new THREE.Color(0xe08a63);
-const SKY_R = 300;
-
-const skyGeo = new THREE.SphereGeometry(SKY_R, 20, 14);
-const skyColors = new Float32Array(skyGeo.attributes.position.count * 3);
-skyGeo.setAttribute('color', new THREE.BufferAttribute(skyColors, 3));
-const skyMesh = new THREE.Mesh(skyGeo, new THREE.MeshBasicMaterial({
-  side: THREE.BackSide, vertexColors: true, fog: false, depthWrite: false,
-}));
-skyMesh.renderOrder = -1;
-scene.add(skyMesh);
-
-const horizon = new THREE.Color();
-const _skyC = new THREE.Color();
-function paintSky(dusk) {
-  const top = SKY_TOP_DAY.clone().lerp(SKY_TOP_DUSK, dusk);
-  const bot = SKY_BOT_DAY.clone().lerp(SKY_BOT_DUSK, dusk);
-  const pos = skyGeo.attributes.position;
-  for (let i = 0; i < pos.count; i++) {
-    const h = Math.max(0, Math.min(1, (pos.getY(i) / SKY_R) * 1.35 + 0.32));
-    _skyC.copy(bot).lerp(top, h);
-    skyColors[i * 3] = _skyC.r;
-    skyColors[i * 3 + 1] = _skyC.g;
-    skyColors[i * 3 + 2] = _skyC.b;
-  }
-  skyGeo.attributes.color.needsUpdate = true;
-  horizon.copy(bot);
-}
-paintSky(0);
+// Sky: a shader dome carrying a gradient, the sun, and a field of stars that
+// comes out as the world turns to night. It follows the camera every frame.
+const sky = makeSky(320);
+scene.add(sky.mesh);
+const horizon = sky.horizon;
 
 // Far enough that the whole island is visible from the lookout — the view
 // down over the valley is the point of standing up there.
-scene.fog = new THREE.Fog(horizon.clone(), 115, 340);
+scene.fog = new THREE.Fog(new THREE.Color(0xdcecf4), 115, 340);
 
 const hemi = new THREE.HemisphereLight(0xbfd9ef, 0x6a7560, 1.15);
 scene.add(hemi);
@@ -149,6 +120,7 @@ if (LOWPOLY) {
 
 let advanceWind = () => {};
 let advanceWater = () => {};
+let water = null;          // the shader sea, in low-poly mode
 
 if (LOWPOLY) {
   const terrain = buildLowPolyTerrain(world.height, world.pathMask, SX, SZ);
@@ -158,9 +130,8 @@ if (LOWPOLY) {
   scene.add(trees);
   advanceWind = addTreeWind(trees.material);
 
-  const water = buildLowPolyWater(SX, SZ);
-  scene.add(water);
-  advanceWater = addWaves(water.material);
+  water = makeWater(SX, SZ, world.height);
+  scene.add(water.mesh);
 } else {
   const meshes = buildMeshes(world.grid);
   scene.add(meshes.opaque);
@@ -296,7 +267,7 @@ scene.add(fireflies.points);
 const townLights = makeTownLights(world.grid, world.lookout, SEA);
 scene.add(townLights.points);
 
-const meteors = makeMeteors(7);
+const meteors = makeMeteors(16);
 scene.add(meteors.lines);
 
 // --- input & player -----------------------------------------------------
@@ -354,6 +325,7 @@ function markFound(n, silent) {
     save();
     refreshCounter();
     checkGate();
+    if (n.node.turns === 'night') pendingShower = true;
   }
 }
 
@@ -438,7 +410,10 @@ addEventListener('resize', resize);
 resize();
 
 const clock = new THREE.Clock();
-let paintedDusk = 0;
+const sunDir = new THREE.Vector3(1, 0.5, 0.3);
+// The shower is held back until the sky has actually darkened. Firing it the
+// instant she opens the memory wastes it against a bright sky.
+let pendingShower = false;
 let dusk = 0;
 let smoothY = null;
 let nearest = null;
@@ -474,7 +449,6 @@ function frame() {
   him.update(dt, 0, true);
 
   if (!ending.inControlOfCamera) follow.update(dt, player.pos, input.orbit);
-  skyMesh.position.copy(camera.position);
 
   // Sun follows the player so shadows stay sharp across a large world.
   sun.position.set(player.pos.x + 45, player.pos.y + 70, player.pos.z + 28);
@@ -482,6 +456,10 @@ function frame() {
 
   advanceWind(t);
   advanceWater(t);
+
+  // The sun the sky draws and the sun the water reflects have to be the one
+  // the scene is actually lit by, or the highlight lands in the wrong place.
+  sunDir.copy(sun.position).sub(sun.target.position).normalize();
 
   // Dusk deepens as she remembers more — but the meteor-shower memory is the
   // hinge. Before she finds it the world only reaches late afternoon; finding
@@ -494,13 +472,18 @@ function frame() {
   // Eased, so the change reads as the sky turning rather than a hard cut.
   dusk += (duskTarget - dusk) * Math.min(1, dt * 0.5);
 
+  if (pendingShower && dusk > 0.55) {
+    pendingShower = false;
+    meteors.burst();
+  }
   meteors.update(dt, player.pos, nightTurned);
 
-  if (Math.abs(dusk - paintedDusk) > 0.005) {
-    paintedDusk = dusk;
-    paintSky(dusk * 0.9);
-  }
+  sky.update(dusk, sunDir, t);
+  sky.mesh.position.copy(camera.position);
   scene.fog.color.copy(horizon);
+  if (water) {
+    water.update(t, dusk, sunDir, horizon, sun.color, horizon);
+  }
   hemi.intensity = 1.15 - dusk * 0.45;
   sun.intensity = 1.55 - dusk * 0.7;
   sun.color.setHSL(0.09, 0.35 + dusk * 0.3, 0.62 - dusk * 0.1);

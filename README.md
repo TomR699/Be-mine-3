@@ -48,6 +48,8 @@ src/
   controls.js       input, player physics, the follow camera
   props.js          memory objects, lamps, flowers
   lowpoly.js        faceted terrain, trees, the ground sampler
+  sky.js            sky shader: gradient, sun, stars
+  water.js          sea shader: waves, fresnel, specular, shore foam
   sets.js           the dressed scenery around each checkpoint
   ending.js         the gate, the cinematic, fireflies, meteors
   memories.js       >>> the content file — this is the one you write <<<
@@ -134,12 +136,38 @@ talking happens in the room.** If she says yes and you want the sky to agree,
 - **P5** — the dry run: deploy, then play it start to finish on the actual
   laptop, offline, before the day
 
+## Shaders
+
+**The sky** is a shader dome, not a coloured mesh. It carries a vertical
+gradient, a horizon band, a real sun disc with bloom around it, and a field of
+procedural stars — hashed per cell of the view direction, each with its own
+brightness and twinkle — that fades in as night comes. The horizon runs day to
+sunset to deep blue in two stages; a single lerp leaves it glowing orange at
+midnight.
+
+**The sea** is a shader too. Waves are generated in the vertex stage and the
+normal is derived from the same function rather than guessed, so the light sits
+correctly on them. Fresnel makes it near-transparent looking down and reflective
+at a glance, there's a sun specular, and the swell flattens into the shallows.
+Foam at the shoreline is driven by real water depth baked into each vertex from
+the terrain heightmap — cheaper and steadier than reading scene depth.
+
+Both are raw ShaderMaterials writing linear colour, which the composer's
+OutputPass tone-maps like everything else. The sea does its own fog, since a
+raw shader doesn't inherit the scene's.
+
 ## The night the sky turns
 
 The nine memories sit along the path in chronological order. One of them —
 the meteor shower — carries `turns: 'night'`. Before she finds it the world
 only ever reaches late afternoon; opening it eases the sky into night over a
 few seconds and starts the shooting stars, which run for the rest of the game.
+
+Finding it also fires a real shower: a burst of meteors running mostly the same
+way across the sky, thinning over about half a minute to the occasional streak
+that continues for the rest of the game. The burst is held back until the sky
+has actually darkened — fired on the keypress it would be wasted against a
+bright sky.
 
 It's the emotional hinge of the story, so it changes the world rather than
 just adding another note. Move the flag to a different entry and the hinge

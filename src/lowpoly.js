@@ -143,19 +143,6 @@ export function buildLowPolyTerrain(height, pathMask, sx, sz) {
   return mesh;
 }
 
-/** A single sea plane. The shoreline is wherever the land rises through it. */
-export function buildLowPolyWater(sx, sz) {
-  const geo = new THREE.PlaneGeometry(sx, sz, 48, 48);
-  geo.rotateX(-Math.PI / 2);
-  geo.translate(sx / 2, SEA + 0.9, sz / 2);
-
-  const mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({
-    color: 0x3f86ad, transparent: true, opacity: 0.78,
-  }));
-  mesh.receiveShadow = true;
-  return mesh;
-}
-
 /**
  * Every tree merged into one geometry — trunk plus two stacked cones, low
  * segment counts, flat shaded. Hundreds of trees for one draw call.
