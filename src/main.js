@@ -13,7 +13,8 @@ import { Character, HER, HIM } from './character.js';
 import { Input, Player, FollowCamera } from './controls.js';
 import { makeProp, makeHalo, makeGlow, makeFlowerField, makeLamp } from './props.js';
 import { makeSet, HERO_OFFSET } from './sets.js';
-import { GATE_REQUIREMENT } from './memories.js';
+import { GATE_REQUIREMENT, HER_NAME, TITLE_LINE } from './memories.js';
+import { Sound } from './audio.js';
 import { Ending, makeGate, makeFireflies, makeTownLights, makeMeteors } from './ending.js';
 import { makeSky } from './sky.js';
 import { makeWater } from './water.js';
@@ -43,6 +44,9 @@ const ui = {
   yes: document.getElementById('yes'),
   other: document.getElementById('other'),
   hint: document.getElementById('hint'),
+  title: document.getElementById('title'),
+  titleName: document.getElementById('title-name'),
+  titleLine: document.getElementById('title-line'),
 };
 
 // --- scene --------------------------------------------------------------
@@ -329,6 +333,8 @@ function markFound(n, silent) {
     refreshCounter();
     checkGate();
     if (n.node.turns === 'night') pendingShower = true;
+    // each memory a semitone up the scale, so collecting them climbs
+    sound.chime([0, 2, 4, 7, 9, 11, 12, 14, 16, 19, 21][found.size % 11]);
   }
 }
 
@@ -340,7 +346,10 @@ const ending = new Ending({
 });
 
 function checkGate() {
-  if (found.size >= GATE_REQUIREMENT) ending.unlock();
+  if (found.size >= GATE_REQUIREMENT && ending.state === 'locked') {
+    ending.unlock();
+    sound.swell();
+  }
 }
 
 refreshCounter();
@@ -372,7 +381,20 @@ function toggleJournal() {
   for (const { node } of nodeObjects) {
     const li = document.createElement('li');
     li.className = node.found ? 'got' : 'missing';
-    li.textContent = node.found ? node.title : '— not yet found —';
+    if (!node.found) {
+      li.textContent = '— not yet found —';
+    } else {
+      // the whole memory, so she can read them again without walking back
+      const when = document.createElement('span');
+      when.className = 'when';
+      when.textContent = node.when;
+      const title = document.createElement('strong');
+      title.textContent = node.title;
+      const body = document.createElement('span');
+      body.className = 'body';
+      body.textContent = node.text;
+      li.append(when, title, body);
+    }
     ui.journalList.appendChild(li);
   }
 }
@@ -391,6 +413,16 @@ addEventListener('keydown', (e) => {
     const ry = LOWPOLY ? groundAt(l.x + 0.5, l.z + 0.5) : world.grid.columnTop(l.x, l.z) + 1;
     player.pos.set(l.x + 0.5, ry, l.z + 0.5);
     player.vel.set(0, 0, 0);
+    return;
+  }
+
+  if (e.code === 'KeyM' && !e.ctrlKey && !e.metaKey) { sound.toggleMute(); return; }
+
+  // Rehearsal reset: wipe progress and reload, so you can play it through and
+  // still hand her a clean save.
+  if (e.code === 'KeyX' && e.ctrlKey && e.shiftKey) {
+    try { localStorage.removeItem(SAVE_KEY); } catch { /* nothing to clear */ }
+    location.reload();
     return;
   }
 
@@ -428,12 +460,14 @@ function frame() {
 
   input.update(dt);
 
-  if (!noteOpen && !journalOpen && !ending.locksInput) {
+  if (started && !noteOpen && !journalOpen && !ending.locksInput) {
     player.update(dt, input);
   }
   gate.update(dt);
+  const wasSeated = ending.state === 'seated';
   ending.update(dt);
   ending.checkApproach();
+  if (!wasSeated && ending.state === 'seated') sound.ending();
 
   // Physics is blocky, the ground is smooth: drop her onto what she can see.
   let renderY = player.pos.y;
@@ -481,6 +515,12 @@ function frame() {
   }
   meteors.update(dt, player.pos, nightTurned);
 
+  // How close is she to the water? Drives how loud the sea is.
+  const groundHere = LOWPOLY ? groundAt(player.pos.x, player.pos.z)
+                             : world.grid.columnTop(player.pos.x, player.pos.z) + 1;
+  const seaNear = Math.max(0, Math.min(1, 1 - (groundHere - (SEA + 1)) / 9));
+  sound.update(dusk, seaNear);
+
   sky.update(dusk, sunDir, t);
   sky.mesh.position.copy(camera.position);
   scene.fog.color.copy(horizon);
@@ -523,9 +563,29 @@ function frame() {
   composer.render();
 }
 
+// --- title card ----------------------------------------------------------
+// Browsers won't let audio start until the user has interacted with the page,
+// so the card doubles as the gesture that turns the sound on.
+const sound = new Sound();
+let started = false;
+
+ui.titleName.textContent = HER_NAME;
+ui.titleLine.textContent = TITLE_LINE;
+
+function begin() {
+  if (started) return;
+  started = true;
+  ui.title.classList.add('going');
+  setTimeout(() => { ui.title.hidden = true; }, 1000);
+  sound.start();
+  renderer.domElement.focus();
+}
+addEventListener('keydown', begin, { once: false });
+ui.title.addEventListener('click', begin);
+
 ui.loading.hidden = true;
 renderer.domElement.focus();
 frame();
 
 // Expose a little for tuning from the console during the build.
-window.BM = { world, player, input, scene, found, ending, gate, townLights, groundAt, LOWPOLY, decorCount: 0, GATE_REQUIREMENT, SEA, nodeObjects, markFound, checkGate };
+window.BM = { world, player, input, scene, found, ending, gate, townLights, groundAt, LOWPOLY, sound, begin, GATE_REQUIREMENT, SEA, nodeObjects, markFound, checkGate };

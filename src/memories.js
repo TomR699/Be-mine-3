@@ -16,6 +16,15 @@
  * >>> nothing else in the codebase cares what these say.
  */
 
+/**
+ * Her name, on the title card.
+ * >>> REPLACE THIS. It's the first thing she reads.
+ */
+export const HER_NAME = 'PLACEHOLDER';
+
+/** The line under her name on the title card. Yours to change. */
+export const TITLE_LINE = 'a place made out of us';
+
 export const PROPS = [
   'table', 'bench', 'sign', 'radio', 'cake', 'book', 'lantern', 'flowers',
   'gift', 'cup', 'boat', 'star', 'racket', 'shuttle', 'plate', 'bed', 'weights',
@@ -117,22 +126,14 @@ const ALL = [
   {
     id: 'i-love-you',
     prop: 'flowers',
-    // ---------------------------------------------------------------------
-    // PENDING. This one hasn't happened yet — it's set for tonight.
-    //
-    // While `pending` is true this memory does not exist: it isn't placed in
-    // the world, it isn't in the journal, and it doesn't count toward the
-    // gate. The game plays exactly as if it were never written.
-    //
-    // Tonight, if you say it: delete the `pending` line below, rewrite the
-    // text to what actually happened, and it appears. If the moment doesn't
-    // arrive, change nothing and she'll never know it was here.
-    // ---------------------------------------------------------------------
-    pending: true,
     title: 'The night I told you',
-    when: 'tonight',
-    text: 'REWRITE ME AFTERWARDS — say where you were, and what she did when '
-        + 'you said it. That detail is the whole memory.',
+    when: 'and I meant it',
+    // >>> THIS ONE IS MINE, NOT YOURS — I wasn't there and you haven't told me
+    // >>> what happened. Rewrite it. Say where you were standing and what she
+    // >>> did when you said it; that detail is the entire memory.
+    text: 'I told you I loved you. I\u2019d been carrying it around for a while '
+        + 'by then, waiting for a moment good enough, and in the end I just '
+        + 'said it. You already know what happened next.',
   },
 ];
 
@@ -146,25 +147,6 @@ export const MEMORIES = ALL.filter((m) => !m.pending);
 export const GATE_REQUIREMENT = Math.max(1, MEMORIES.length - 2);
 
 /**
- * The ending. Lines appear one at a time.
- * >>> DRAFT. This is the part that should be yours — say it how you'd say it.
+ * The ending has no words in it — she sits down next to him and the talking
+ * happens in the room. Nothing to write here on purpose.
  */
-export const ENDING_LINES = [
-  'You found all of it.',
-  'Every one of those days, I was paying attention.',
-  'So there’s only one thing left to ask.',
-];
-
-/**
- * If you've already told her you love her by the time she plays this, these
- * land better — swap them in above.
- *
- *   'You found all of it.'
- *   'I meant what I said, and I've meant it for a while.'
- *   'So there's one thing I still haven't actually asked you.'
- */
-
-/** >>> DRAFT. Your words. */
-export const THE_QUESTION = 'Will you be my girlfriend?';
-export const YES_LABEL = 'Yes';
-export const OTHER_LABEL = 'Ask me again out loud';

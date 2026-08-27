@@ -31,7 +31,9 @@ Any static server works. On GitHub Pages it just works, no configuration.
 | `E` | look closer at a memory |
 | `Esc` | the journal of what she's found |
 | `Space` | during the ending, move to the next line |
+| `M` | mute |
 | `Ctrl`+`Shift`+`E` | rehearsal shortcut: find everything and jump to the ending |
+| `Ctrl`+`Shift`+`X` | wipe progress and reload, for a clean hand-over |
 
 The camera is free — orbit, zoom, the lot.
 
@@ -53,6 +55,7 @@ src/
   controls.js       input, player physics, the follow camera
   props.js          memory objects, lamps, flowers
   lowpoly.js        faceted terrain, trees, the ground sampler
+  audio.js          synthesised wind, sea, pad, chimes
   sky.js            sky shader: gradient, sun, stars
   water.js          sea shader: waves, fresnel, specular, shore foam
   sets.js           the dressed scenery around each checkpoint
@@ -154,6 +157,22 @@ talking happens in the room.** If she says yes and you want the sky to agree,
 - **P5** — the dry run: deploy, then play it start to finish on the actual
   laptop, offline, before the day
 
+## Sound
+
+Synthesised at runtime — no audio files to lose or fail to load. Wind is
+filtered noise breathing on two LFOs at different rates so the gusting never
+sounds periodic; the sea is darker noise on a slow swell that rises as she
+approaches the water; and a quiet held chord opens up and warms as dusk falls,
+so the world sounds later rather than only looking it. Each memory rings a soft
+bell a step further up the scale, so collecting them climbs.
+
+Browsers refuse to start audio until the user interacts with the page, which is
+why the title card exists — it is the gesture that turns the sound on.
+
+**Optional:** drop a file at `audio/theme.mp3` and it plays over the bench scene
+at the end. If it isn't there nothing breaks and the ending runs on wind alone.
+That's the one place a song of your own belongs.
+
 ## Shaders
 
 **The sky** is a shader dome, not a coloured mesh. It carries a vertical
@@ -192,6 +211,10 @@ just adding another note. Move the flag to a different entry and the hinge
 moves with it.
 
 ## The part that needs you
+
+`HER_NAME` at the top of `src/memories.js` is on the title card and is still
+`PLACEHOLDER`. `TITLE_LINE` is the line underneath it.
+
 
 The nine memories in `src/memories.js` are drafts written from your notes,
 with your own phrases kept deliberately. Read them as her and change anything

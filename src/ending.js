@@ -1,5 +1,4 @@
 import * as THREE from 'three';
-import { ENDING_LINES, THE_QUESTION, YES_LABEL, OTHER_LABEL } from './memories.js';
 
 /**
  * The last thirty seconds.
