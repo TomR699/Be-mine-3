@@ -45,6 +45,23 @@ export const EMISSIVE = new Set([B.LAMP_ON]);
 
 export function isPassable(id) { return PASSABLE.has(id); }
 
+/**
+ * A stable per-block variation, so a hillside isn't one flat sheet of the
+ * same green. This is the cheapest thing that stops it reading as plastic.
+ */
+function blockJitter(x, y, z) {
+  let h = Math.imul(x, 73856093) ^ Math.imul(y, 19349663) ^ Math.imul(z, 83492791);
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  return 0.93 + (((h ^ (h >>> 16)) >>> 0) / 4294967295) * 0.14;
+}
+
+/** Surface UVs from world position, so grain flows across blocks. */
+function faceUV(face, x, y, z) {
+  if (face.dir[0] !== 0) return [z, y];
+  if (face.dir[1] !== 0) return [x, z];
+  return [x, y];
+}
+
 /** Does this block cast ambient occlusion onto its neighbours? */
 function occludes(id) { return id !== B.AIR && id !== B.WATER && id !== B.FLOWER; }
 
@@ -182,15 +199,19 @@ export function buildMeshes(grid) {
           }
 
           c.setHex(COLORS[id] ?? 0xff00ff);
-          const shade = EMISSIVE.has(id) ? 1 : face.shade;
+          const emissive = EMISSIVE.has(id);
+          const shade = emissive ? 1 : face.shade;
+          const jitter = emissive || isWater ? 1 : blockJitter(x, y, z);
           const base = target.pos.length / 3;
 
           for (let i = 0; i < 4; i++) {
             const [dx, dy, dz] = face.corners[i];
-            const k = shade * (EMISSIVE.has(id) ? 1 : AO_LEVELS[ao[i]]);
+            const k = shade * jitter * (emissive ? 1 : AO_LEVELS[ao[i]]);
             target.pos.push(x + dx, y + dy, z + dz);
             target.norm.push(face.dir[0], face.dir[1], face.dir[2]);
             target.col.push(c.r * k, c.g * k, c.b * k);
+            const [u, v] = faceUV(face, x + dx, y + dy, z + dz);
+            target.uv.push(u, v);
           }
 
           // Split the quad along the darker diagonal, or the AO gradient
@@ -212,18 +233,20 @@ export function buildMeshes(grid) {
   };
 }
 
-function newBuf() { return { pos: [], norm: [], col: [], idx: [] }; }
+function newBuf() { return { pos: [], norm: [], col: [], uv: [], idx: [] }; }
 
 function toMesh(d, transparent) {
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.Float32BufferAttribute(d.pos, 3));
   geo.setAttribute('normal', new THREE.Float32BufferAttribute(d.norm, 3));
   geo.setAttribute('color', new THREE.Float32BufferAttribute(d.col, 3));
+  geo.setAttribute('uv', new THREE.Float32BufferAttribute(d.uv, 2));
   geo.setIndex(d.idx);
   geo.computeBoundingSphere();
 
   const mat = new THREE.MeshLambertMaterial({
     vertexColors: true,
+    map: transparent ? null : grainTexture(),
     transparent,
     opacity: transparent ? 0.72 : 1,
   });
@@ -281,4 +304,40 @@ export function addWind(material, strength = 0.09) {
   };
   material.needsUpdate = true;
   return (t) => { if (ref) ref.uniforms.uTime.value = t; };
+}
+
+/**
+ * A faint procedural grain, multiplied over the flat block colours. Generated
+ * rather than loaded, so there's still no asset to lose. One shared instance.
+ */
+let _grain = null;
+export function grainTexture() {
+  if (_grain) return _grain;
+
+  const N = 64;
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = N;
+  const ctx = cv.getContext('2d');
+  const img = ctx.createImageData(N, N);
+
+  for (let i = 0; i < N * N; i++) {
+    // Mostly white with a little speckle, plus a soft blotch pattern so it
+    // does not read as uniform TV static.
+    const x = i % N, y = (i / N) | 0;
+    const blotch = Math.sin(x * 0.19) * Math.cos(y * 0.23) * 6;
+    const v = 236 + Math.random() * 19 + blotch;
+    const c = Math.max(0, Math.min(255, v)) | 0;
+    img.data[i * 4] = c;
+    img.data[i * 4 + 1] = c;
+    img.data[i * 4 + 2] = c;
+    img.data[i * 4 + 3] = 255;
+  }
+  ctx.putImageData(img, 0, 0);
+
+  _grain = new THREE.CanvasTexture(cv);
+  _grain.wrapS = _grain.wrapT = THREE.RepeatWrapping;
+  // Neutral multiplier, not colour data — keep it out of sRGB conversion.
+  _grain.colorSpace = THREE.LinearSRGBColorSpace;
+  _grain.anisotropy = 4;
+  return _grain;
 }

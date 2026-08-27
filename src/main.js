@@ -10,6 +10,7 @@ import { EffectComposer } from '../vendor/addons/postprocessing/EffectComposer.j
 import { RenderPass } from '../vendor/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from '../vendor/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from '../vendor/addons/postprocessing/OutputPass.js';
+import { BokehPass } from '../vendor/addons/postprocessing/BokehPass.js';
 
 const SAVE_KEY = 'be-mine-3.save.v1';
 
@@ -112,6 +113,13 @@ const composer = new EffectComposer(renderer);
 composer.addPass(new RenderPass(scene, camera));
 const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.55, 0.75, 0.72);
 composer.addPass(bloom);
+
+// Shallow depth of field. Blocks read as a handmade diorama rather than a
+// screenshot of Minecraft largely because of this — the eye is told what to
+// look at, and the far hills go soft the way a miniature does.
+const dof = new BokehPass(scene, camera, { focus: 14, aperture: 0.00016, maxblur: 0.006 });
+composer.addPass(dof);
+
 composer.addPass(new OutputPass());
 
 // --- world --------------------------------------------------------------
@@ -397,6 +405,14 @@ function frame() {
     markFound(nearest);
     openNote(nearest.node);
   }
+
+  // Focus tracks her distance from the camera, so she is always sharp.
+  const focusDist = camera.position.distanceTo(her.root.position);
+  dof.uniforms.focus.value += (focusDist - dof.uniforms.focus.value) * Math.min(1, dt * 2.5);
+  // The ending is intimate: tighter focus, more falloff.
+  const wantAperture = ending.inControlOfCamera ? 0.00045 : 0.00016;
+  dof.uniforms.aperture.value +=
+    (wantAperture - dof.uniforms.aperture.value) * Math.min(1, dt * 0.8);
 
   composer.render();
 }
