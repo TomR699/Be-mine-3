@@ -246,3 +246,98 @@ export function addTreeWind(material, strength = 0.34) {
   material.needsUpdate = true;
   return (t) => { if (ref) ref.uniforms.uTime.value = t; };
 }
+
+/**
+ * Boulders, bushes and grass tufts, merged into one geometry. These sit around
+ * the lip of each terrace and are what tie a set into the hillside it was cut
+ * into — without them the cut edge reads as a seam.
+ */
+export function buildScatter(items) {
+  const rockGeo = new THREE.IcosahedronGeometry(1, 0).toNonIndexed();
+  const bushGeo = new THREE.IcosahedronGeometry(1, 0).toNonIndexed();
+  const bladeGeo = new THREE.ConeGeometry(1, 1, 3, 1).toNonIndexed();
+  rockGeo.computeVertexNormals();
+  bushGeo.computeVertexNormals();
+  bladeGeo.computeVertexNormals();
+
+  const pos = [], nrm = [], col = [];
+  const m = new THREE.Matrix4();
+  const q = new THREE.Quaternion();
+  const e = new THREE.Euler();
+  const c = new THREE.Color();
+
+  const ROCK = [0x8d8a97, 0x7c7986, 0x99959f, 0x6f6d78];
+  const LEAF = [0x4f8a4a, 0x437d46, 0x5f9a4e];
+  const GRASS = [0x74a94f, 0x6b9e48, 0x83b158];
+
+  const append = (geo, matrix, colour) => {
+    const g = geo.clone().applyMatrix4(matrix);
+    const p = g.attributes.position.array;
+    const nn = g.attributes.normal.array;
+    for (let i = 0; i < p.length; i += 3) {
+      pos.push(p[i], p[i + 1], p[i + 2]);
+      nrm.push(nn[i], nn[i + 1], nn[i + 2]);
+      col.push(colour.r, colour.g, colour.b);
+    }
+    g.dispose();
+  };
+
+  for (const d of items) {
+    const s = d.scale;
+
+    if (d.kind === 'rock') {
+      // squashed and tilted, so they read as bedrock rather than marbles
+      e.set(d.seed * 2.4, d.seed * 6.1, d.seed * 1.7);
+      q.setFromEuler(e);
+      m.compose(
+        new THREE.Vector3(d.x, d.y + 0.18 * s, d.z),
+        q,
+        new THREE.Vector3(0.62 * s, 0.4 * s, 0.55 * s)
+      );
+      c.setHex(ROCK[Math.floor(d.seed * 997) % ROCK.length]);
+      append(rockGeo, m, c);
+
+    } else if (d.kind === 'bush') {
+      e.set(0, d.seed * 5.3, 0);
+      q.setFromEuler(e);
+      m.compose(
+        new THREE.Vector3(d.x, d.y + 0.34 * s, d.z),
+        q,
+        new THREE.Vector3(0.62 * s, 0.5 * s, 0.6 * s)
+      );
+      c.setHex(LEAF[Math.floor(d.seed * 733) % LEAF.length]);
+      c.multiplyScalar(0.9 + d.seed * 0.2);
+      append(bushGeo, m, c);
+
+    } else {
+      // a few blades leaning different ways
+      c.setHex(GRASS[Math.floor(d.seed * 521) % GRASS.length]);
+      for (let k = 0; k < 3; k++) {
+        const a = d.seed * 6.28 + k * 2.1;
+        e.set(0.22 * Math.cos(a), a, 0.22 * Math.sin(a));
+        q.setFromEuler(e);
+        m.compose(
+          new THREE.Vector3(d.x + Math.cos(a) * 0.16, d.y + 0.16 * s, d.z + Math.sin(a) * 0.16),
+          q,
+          new THREE.Vector3(0.08 * s, 0.42 * s, 0.08 * s)
+        );
+        append(bladeGeo, m, c);
+      }
+    }
+  }
+
+  rockGeo.dispose();
+  bushGeo.dispose();
+  bladeGeo.dispose();
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3));
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  geo.computeBoundingSphere();
+
+  const mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true }));
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  return mesh;
+}

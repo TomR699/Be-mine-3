@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { generate, SEA, SX, SZ } from './world.js';
 import {
-  buildLowPolyTerrain, buildLowPolyTrees,
+  buildLowPolyTerrain, buildLowPolyTrees, buildScatter,
   makeGroundSampler, addTreeWind,
 } from './lowpoly.js';
 
@@ -115,6 +115,7 @@ if (LOWPOLY) {
   for (const l of world.lamps) l.y = groundAt(l.x, l.z);
   for (const f of world.flowers) f.y = groundAt(f.x, f.z);
   for (const t of world.trees) t.y = groundAt(t.x, t.z) - 0.3;
+  for (const d of world.decor) d.y = groundAt(d.x, d.z) - 0.15;
   world.gate.y = groundAt(world.gate.x, world.gate.z);
 }
 
@@ -129,6 +130,8 @@ if (LOWPOLY) {
   const trees = buildLowPolyTrees(world.trees);
   scene.add(trees);
   advanceWind = addTreeWind(trees.material);
+
+  scene.add(buildScatter(world.decor));
 
   water = makeWater(SX, SZ, world.height);
   scene.add(water.mesh);
@@ -525,4 +528,4 @@ renderer.domElement.focus();
 frame();
 
 // Expose a little for tuning from the console during the build.
-window.BM = { world, player, input, scene, found, ending, gate, townLights, groundAt, LOWPOLY, GATE_REQUIREMENT, SEA, nodeObjects, markFound, checkGate };
+window.BM = { world, player, input, scene, found, ending, gate, townLights, groundAt, LOWPOLY, decorCount: 0, GATE_REQUIREMENT, SEA, nodeObjects, markFound, checkGate };

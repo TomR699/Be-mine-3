@@ -184,7 +184,7 @@ export function generate() {
           if (h <= SEA + 1) continue;               // not in the water
           if (h > 24) continue;                     // not up the mesa
 
-          const rp = Math.round(radius * 0.85);
+          const rp = Math.round(radius);   // the whole footprint must be clear
           let onPath = 0;
           for (let dz = -rp; dz <= rp; dz += 2) {
             for (let dx = -rp; dx <= rp; dx += 2) {
@@ -235,31 +235,103 @@ export function generate() {
   // wobbles with angle, so it reads as a natural shoulder in the hillside
   // instead of a circular plateau stamped on top of one.
   const setMask = new Uint8Array(SX * SZ);
+  const RIM = 6;              // how far the terrace eases back into the slope
   for (const site of sites) {
     const target = height[site.x + site.z * SX];
     const R = site.radius;
-    for (let dz = -R - 4; dz <= R + 4; dz++) {
-      for (let dx = -R - 4; dx <= R + 4; dx++) {
+    const reach = Math.ceil(R * 1.24 + RIM);
+    for (let dz = -reach; dz <= reach; dz++) {
+      for (let dx = -reach; dx <= reach; dx++) {
         const x = site.x + dx, z = site.z + dz;
         if (x < 0 || z < 0 || x >= SX || z >= SZ) continue;
 
         const dist = Math.hypot(dx, dz);
         if (dist < 0.001) { height[x + z * SX] = target; continue; }
 
+        // The whole declared radius is levelled, then the ground eases back
+        // into the hillside beyond it. Flattening only part of the radius is
+        // what left the floor slabs hanging out over the drop.
         const ang = Math.atan2(dz, dx);
-        const wobble = 0.88 + 0.3 * noise2(Math.cos(ang) * 1.7 + 8,
+        const wobble = 1.0 + 0.24 * noise2(Math.cos(ang) * 1.7 + 8,
                                            Math.sin(ang) * 1.7 + 8, 606);
-        const edge = R * wobble;
-        if (dist > edge) continue;
+        const flat = R * wobble;
+        if (dist > flat + RIM) continue;
 
-        const u = 1 - dist / edge;                 // 1 at the centre, 0 at the rim
-        const w = u >= 0.45 ? 1 : smooth(u / 0.45);
+        const w = dist <= flat ? 1 : smooth(1 - (dist - flat) / RIM);
         const k = x + z * SX;
         // Leave the path exactly as carved — it is the only way to the gate.
         if (pathMask[k]) continue;
         height[k] = Math.round(height[k] * (1 - w) + target * w);
-        if (w > 0.98) setMask[k] = 1;
+        if (dist <= flat) setMask[k] = 1;
       }
+    }
+  }
+
+  // A worn track from the path to each set. Without one they read as things
+  // dropped on the island rather than places anyone ever walked to.
+  const spurMask = new Uint8Array(SX * SZ);
+  for (let i = 0; i < sites.length; i++) {
+    const site = sites[i];
+    const pi = anchorIndex(i);
+    const [px, pz] = path[pi];
+    const fromH = Math.round(pathH[pi]);
+    const toH = height[site.x + site.z * SX];
+
+    const outer = Math.hypot(site.x - px, site.z - pz);
+    const steps = Math.ceil(outer * 2);
+    for (let sIdx = 0; sIdx <= steps; sIdx++) {
+      const t = sIdx / steps;
+      const cx = Math.round(px + (site.x - px) * t);
+      const cz = Math.round(pz + (site.z - pz) * t);
+
+      // Climb between the path and the lip of the terrace, then run level.
+      // Easing all the way to the centre instead drags the ramp across the
+      // flat ground the set is standing on.
+      const ds = Math.hypot(cx - site.x, cz - site.z);
+      let h;
+      if (ds <= site.radius) h = toH;
+      else {
+        const u = Math.max(0, Math.min(1,
+          (outer - ds) / Math.max(1, outer - site.radius)));
+        h = Math.round(fromH + (toH - fromH) * smooth(u));
+      }
+      for (let dz = -2; dz <= 2; dz++) {
+        for (let dx = -2; dx <= 2; dx++) {
+          const x = cx + dx, z = cz + dz;
+          if (x < 0 || z < 0 || x >= SX || z >= SZ) continue;
+          const d = Math.hypot(dx, dz);
+          if (d > 2) continue;
+          const k = x + z * SX;
+          if (pathMask[k]) continue;
+          if (d <= 1.3) { height[k] = h; spurMask[k] = 1; }
+          else height[k] = Math.round(height[k] * 0.45 + h * 0.55);
+        }
+      }
+    }
+  }
+
+  // Where a terrace runs up against the path, ease between the two rather than
+  // leaving a step. The path can't be re-levelled — it's the route to the gate
+  // — so the terrace has to be the one that gives way at the join.
+  for (let z = 1; z < SZ - 1; z++) {
+    for (let x = 1; x < SX - 1; x++) {
+      const k = x + z * SX;
+      if (!setMask[k] || pathMask[k]) continue;
+
+      let nearest = -1, nearestH = 0;
+      for (let dz = -3; dz <= 3; dz++) {
+        for (let dx = -3; dx <= 3; dx++) {
+          const nx = x + dx, nz = z + dz;
+          if (nx < 0 || nz < 0 || nx >= SX || nz >= SZ) continue;
+          if (!pathMask[nx + nz * SX]) continue;
+          const d = Math.hypot(dx, dz);
+          if (nearest < 0 || d < nearest) { nearest = d; nearestH = height[nx + nz * SX]; }
+        }
+      }
+      if (nearest < 0) continue;
+
+      const w = Math.max(0, 1 - nearest / 3.5) * 0.85;
+      height[k] = Math.round(height[k] * (1 - w) + nearestH * w);
     }
   }
 
@@ -274,7 +346,7 @@ export function generate() {
         else if (y < h) id = B.DIRT;
         else if (h <= SEA) id = B.SAND;
         else if (h > 34) id = B.SNOW;
-        else id = pathMask[i] ? B.PATH : B.GRASS;
+        else id = (pathMask[i] || spurMask[i]) ? B.PATH : B.GRASS;
         grid.set(x, y, z, id);
       }
       for (let y = h + 1; y <= SEA; y++) grid.set(x, y, z, B.WATER);
@@ -291,8 +363,8 @@ export function generate() {
     for (let x = 2; x < SX - 2; x++) {
       const i = x + z * SX;
       const h = height[i];
-      if (h <= SEA + 1 || h > 26 || pathMask[i] || setMask[i]) continue;
-      if (sites.some((st) => Math.hypot(x - st.x, z - st.z) < st.radius + 2)) continue;
+      if (h <= SEA + 1 || h > 26 || pathMask[i] || setMask[i] || spurMask[i]) continue;
+      if (sites.some((st) => Math.hypot(x - st.x, z - st.z) < st.radius + 1)) continue;
       // Keep the camera's first view clear — a tree at spawn fills the screen.
       const nearSpawn = Math.hypot(x - SPAWN.x, z - SPAWN.z) < 9;
       const r = hash2(x, z, 4242);
@@ -305,6 +377,41 @@ export function generate() {
       } else if (r < 0.014) {
         flowers.push({ x: x + 0.5, y: h + 1, z: z + 0.5, tint: hash2(x, z, 8) });
       }
+    }
+  }
+
+  // Dress the rim of each terrace: boulders, bushes and grass along the lip
+  // where the cut meets the hillside. This is what stops a set reading as an
+  // object placed on the island rather than a part of it.
+  const decor = [];
+  for (let i = 0; i < sites.length; i++) {
+    const site = sites[i];
+    const R = site.radius;
+    const count = Math.round(R * 7);
+    for (let n = 0; n < count; n++) {
+      const r1 = hash2(i * 977 + n, n * 31 + 7, 5150);
+      const r2 = hash2(n * 53 + 3, i * 611 + n, 8801);
+      const r3 = hash2(i + n * 17, n * 7 + i * 3, 2027);
+
+      const ang = r1 * Math.PI * 2;
+      // an annulus hugging the lip, mostly just outside the level ground
+      const dist = R * (0.86 + r2 * 0.55);
+      const x = Math.round(site.x + Math.cos(ang) * dist);
+      const z = Math.round(site.z + Math.sin(ang) * dist);
+      if (x < 1 || z < 1 || x >= SX - 1 || z >= SZ - 1) continue;
+
+      const k = x + z * SX;
+      if (pathMask[k] || spurMask[k]) continue;      // not on anything walked
+      const h = height[k];
+      if (h <= SEA + 1) continue;
+
+      // rocks cluster on the cut edge, greenery spreads further out
+      const onLip = dist < R * 1.06;
+      const kind = r3 < (onLip ? 0.42 : 0.12) ? 'rock' : (r3 < 0.62 ? 'bush' : 'tuft');
+      decor.push({
+        x: x + 0.5, y: h + 1, z: z + 0.5, kind,
+        scale: 0.6 + r2 * 0.9, seed: r3,
+      });
     }
   }
 
@@ -345,7 +452,7 @@ export function generate() {
     return { ...m, x: x + 0.5, y, z: z + 0.5, facing, found: false };
   });
 
-  return { grid, height, pathMask, lamps, nodes, flowers, trees, gate, spawn: SPAWN, lookout: LOOKOUT };
+  return { grid, height, pathMask, spurMask, lamps, nodes, flowers, trees, decor, gate, spawn: SPAWN, lookout: LOOKOUT };
 }
 
 function nearPath(mask, x, z, r) {

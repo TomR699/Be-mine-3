@@ -102,17 +102,17 @@ const BUILDERS = {
   // Labyrinth, 13-15 Bridge Street. Built from the photo of the front.
   'outside-the-club'(g) {
     // pavement, kerb, and a strip of road
-    g.add(floor(15, 5.2, 0xa8a49a, 0.02, 0, 1.4));
-    g.add(b(15, 0.16, 0.34, 0x8e8a80, 0, 0, 3.9, { flat: true }));
-    g.add(b(15, 0.06, 2.4, 0x3a3a3e, 0, 0, 5.2, { flat: true }));
-    for (const x of [-5.5, -2.7, 0.1, 2.9, 5.7]) {                   // double yellows
-      g.add(b(2.2, 0.02, 0.1, 0xd9b036, x, 0.07, 4.35, { flat: true }));
-      g.add(b(2.2, 0.02, 0.1, 0xd9b036, x, 0.07, 4.55, { flat: true }));
+    g.add(floor(13, 4.6, 0xa8a49a, 0.02, 0, 1.1));
+    g.add(b(13, 0.16, 0.34, 0x8e8a80, 0, 0, 3.3, { flat: true }));
+    g.add(b(13, 0.06, 1.8, 0x3a3a3e, 0, 0, 4.4, { flat: true }));
+    for (const x of [-4.8, -2.4, 0.0, 2.4, 4.8]) {                   // double yellows
+      g.add(b(1.9, 0.02, 0.1, 0xd9b036, x, 0.07, 4.05, { flat: true }));
+      g.add(b(1.9, 0.02, 0.1, 0xd9b036, x, 0.07, 4.25, { flat: true }));
     }
 
     // the building: brick above, dark marble at street level
-    g.add(b(14, 3.4, 0.7, LAB.marble, 0, 0, -3.4));
-    g.add(b(14, 2.6, 0.7, LAB.brick, 0, 3.4, -3.4));
+    g.add(b(12.6, 3.4, 0.7, LAB.marble, 0, 0, -3.4));
+    g.add(b(12.6, 2.6, 0.7, LAB.brick, 0, 3.4, -3.4));
     for (const x of [-4.6, -1.4, 1.8, 5.0]) {                        // marble panel joints
       g.add(b(0.08, 3.3, 0.04, LAB.marbleLt, x, 0, -3.06));
     }
@@ -155,7 +155,7 @@ const BUILDERS = {
     }
 
     // canopy, its fluorescent tubes, and the festoon bulbs along the front
-    g.add(b(13.4, 0.34, 2.9, 0x1c1a20, 0, 4.3, -2.1));
+    g.add(b(12.4, 0.34, 2.9, 0x1c1a20, 0, 4.3, -2.1));
     for (const x of [-3.4, 2.4]) {
       g.add(b(5.2, 0.16, 0.16, LAB.tube, x, 4.12, -1.0, { emissive: 0x5f7488 }));
     }

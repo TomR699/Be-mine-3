@@ -95,9 +95,22 @@ the island already is there, how far they sit from the path, and how far from
 the other checkpoints. Candidates with any path inside their footprint are
 rejected outright unless nothing else qualifies — the path loops back on itself,
 so being clear of the stretch you arrived on is no guarantee. The winner gets a
-terrace cut into the hillside with an eased rim whose radius wobbles with angle,
-so it reads as a natural shoulder rather than a circular plateau. The carved
-path is never re-cut: it is the only route to the gate.
+terrace cut into the hillside — level across its **whole** declared radius, then
+easing back into the slope beyond it. Levelling only part of the radius is what
+left floor slabs hanging out over the drop.
+
+The carved path is never re-cut: it is the only route to the gate. Where a
+terrace runs into it, the terrace is the one that gives way — the ground eases
+to meet the path over about three blocks, so the join is a ramp rather than a
+step.
+
+Two more things tie a set to the island rather than leaving it sitting on top
+of one. A **worn spur** is carved from the path to each site, climbing between
+the two and running level once inside the terrace; without it nothing explains
+why there's a flat clearing there. And the **lip of every terrace is dressed**
+with boulders, bushes and grass — rocks clustered on the cut edge, greenery
+spreading further out — which is what hides the seam where the cut meets the
+hillside.
 
 Each set then faces back toward the path, so it opens to the direction she
 arrives from. `SET_RADIUS` in `sets.js` is how each set tells the generator how
