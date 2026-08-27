@@ -3,7 +3,7 @@
 A small voxel game. She plays as herself, walks an island built out of things
 you've done together, and finds you at the end of it.
 
-**Status: P3 — low-poly art pass, real content in.** The world, the character, the camera, and the memory
+**Status: P3 — low-poly, dressed sets, real content in.** The world, the character, the camera, and the memory
 loop all work. The content is placeholder — see
 [what's left](#whats-left) below.
 
@@ -48,6 +48,7 @@ src/
   controls.js       input, player physics, the follow camera
   props.js          memory objects, lamps, flowers
   lowpoly.js        faceted terrain, trees, the ground sampler
+  sets.js           the dressed scenery around each checkpoint
   ending.js         the gate, the cinematic, fireflies, meteors
   memories.js       >>> the content file — this is the one you write <<<
 ```
@@ -80,6 +81,13 @@ individual boxes.
 rather than voxels, because a full-block flower looks like chewing gum and a
 full-block lamp post looks like a wall. Flowers are instanced, so hundreds of
 them cost two draw calls.
+
+**Each checkpoint is a dressed set.** `sets.js` builds the scenery around every
+memory — a tennis court with a net and lines, a gym floor with a squat rack, a
+club frontage with a smoking pen. Each stands on its own floor (decking, paving,
+a rug, clay) so it reads as a place rather than furniture on a hillside, and the
+terrain generator levels a pad under each one before the world is filled. Sets
+are visual only; she can walk through them.
 
 **Memories drive everything.** Each entry in `memories.js` becomes a prop
 anchored to real ground along the path, with a halo while it's unfound. Opening

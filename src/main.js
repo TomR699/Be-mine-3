@@ -12,6 +12,7 @@ import { buildMeshes, addWind, addWaves } from './voxel.js';
 import { Character, HER, HIM } from './character.js';
 import { Input, Player, FollowCamera } from './controls.js';
 import { makeProp, makeHalo, makeGlow, makeFlowerField, makeLamp } from './props.js';
+import { makeSet, HERO_OFFSET } from './sets.js';
 import { GATE_REQUIREMENT } from './memories.js';
 import { Ending, makeGate, makeFireflies, makeTownLights, makeMeteors } from './ending.js';
 import { EffectComposer } from '../vendor/addons/postprocessing/EffectComposer.js';
@@ -174,23 +175,39 @@ if (LOWPOLY) {
 }
 scene.add(makeFlowerField(world.flowers));
 
-// memory props
+// Memory checkpoints: a dressed set, with the memory's own object as its hero.
+// Every node sits back from the path by the same offset, so every set turns the
+// same way — toward the path she walks in on.
+const SET_FACING = Math.PI / 4;
+
 const nodeObjects = [];
 for (const node of world.nodes) {
   const group = new THREE.Group();
   group.position.set(node.x, node.y, node.z);
 
+  // Everything sits inside a rotated container, so hero offsets can be written
+  // in the set's own space rather than pre-rotated by hand.
+  const dress = new THREE.Group();
+  dress.rotation.y = SET_FACING;
+  group.add(dress);
+
+  const set = makeSet(node.id);
+  if (set) dress.add(set);
+
+  const [ox, oy, oz] = HERO_OFFSET[node.id] || [0, 0, 0];
+
   const prop = makeProp(node.prop);
-  group.add(prop);
+  prop.position.set(ox, oy, oz);
+  dress.add(prop);
 
   const halo = makeHalo();
-  halo.position.y = 1.7;
-  group.add(halo);
+  halo.position.set(ox, oy + 1.7, oz);
+  dress.add(halo);
 
   const glow = makeGlow(0xffe9a8, 2.6, 0.16);
-  glow.position.y = 0.06;
+  glow.position.set(ox, oy + 0.06, oz);
   glow.visible = false;
-  group.add(glow);
+  dress.add(glow);
 
   scene.add(group);
   nodeObjects.push({ node, group, halo, glow, prop });
@@ -491,7 +508,7 @@ function frame() {
 
   // Find the closest unopened memory within reach.
   nearest = null;
-  let best = 3.2;
+  let best = 4.2;
   for (const n of nodeObjects) {
     n.halo.rotation.y += dt * 1.1;
     n.halo.position.y = 1.7 + Math.sin(t * 1.8) * 0.09;

@@ -59,9 +59,18 @@ const ALL = [
         + 'serve.',
   },
   {
+    id: 'the-gym',
+    prop: 'weights',
+    title: 'Training together',
+    when: 'the one we keep going back to',
+    text: 'The thing we bonded over before we bonded over anything else. '
+        + 'Counting each other’s reps, arguing about form, both of us far too '
+        + 'competitive about it. It’s ours.',
+  },
+  {
     id: 'nandos',
     prop: 'plate',
-    title: 'The gym, then Nando’s',
+    title: 'Nando’s, and the day after',
     when: 'our first proper day out',
     text: 'We trained, then spent the whole day in town. Nothing special, and '
         + 'the best day I’d had in ages. You kissed me goodbye and I could '

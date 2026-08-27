@@ -114,6 +114,48 @@ export function generate() {
     }
   }
 
+  // Where the gate goes, and where each checkpoint sits. Both are needed before
+  // the columns are filled, because the checkpoints flatten the ground first —
+  // a dressed set on a slope is half-buried at one end and floating at the other.
+  let gateIndex = path.length - 1;
+  for (let i = 0; i < path.length; i++) {
+    if (Math.hypot(path[i][0] - LOOKOUT.x, path[i][1] - LOOKOUT.z) < 17.5) {
+      gateIndex = i;
+      break;
+    }
+  }
+
+  const usable = gateIndex - 6;
+  const anchorCell = (i) => {
+    const a = path[Math.max(4, Math.round(8 + i * ((usable - 8) / MEMORIES.length)))];
+    return [Math.round(a[0]) - 3, Math.round(a[1]) - 3];
+  };
+
+  // Level a pad under each set, blending out at the rim so it isn't a plateau.
+  const setMask = new Uint8Array(SX * SZ);
+  const PAD = 7;
+  for (let i = 0; i < MEMORIES.length; i++) {
+    const [ax, az] = anchorCell(i);
+    if (ax < 0 || az < 0 || ax >= SX || az >= SZ) continue;
+    const target = height[ax + az * SX];
+    for (let dz = -PAD; dz <= PAD; dz++) {
+      for (let dx = -PAD; dx <= PAD; dx++) {
+        const x = ax + dx, z = az + dz;
+        if (x < 0 || z < 0 || x >= SX || z >= SZ) continue;
+        const dist = Math.hypot(dx, dz);
+        if (dist > PAD) continue;
+        const k = x + z * SX;
+        if (dist <= PAD - 2.5) {
+          height[k] = target;
+          setMask[k] = 1;
+        } else {
+          const blend = (PAD - dist) / 2.5;
+          height[k] = Math.round(height[k] * (1 - blend) + target * blend);
+        }
+      }
+    }
+  }
+
   // Fill columns.
   for (let z = 0; z < SZ; z++) {
     for (let x = 0; x < SX; x++) {
@@ -142,7 +184,7 @@ export function generate() {
     for (let x = 2; x < SX - 2; x++) {
       const i = x + z * SX;
       const h = height[i];
-      if (h <= SEA + 1 || h > 26 || pathMask[i]) continue;
+      if (h <= SEA + 1 || h > 26 || pathMask[i] || setMask[i]) continue;
       // Keep the camera's first view clear — a tree at spawn fills the screen.
       const nearSpawn = Math.hypot(x - SPAWN.x, z - SPAWN.z) < 9;
       const r = hash2(x, z, 4242);
@@ -173,13 +215,6 @@ export function generate() {
 
   // The gate sits at the foot of the ramp, where the path starts climbing
   // toward the mesa. Everything either side of it is cliff.
-  let gateIndex = path.length - 1;
-  for (let i = 0; i < path.length; i++) {
-    if (Math.hypot(path[i][0] - LOOKOUT.x, path[i][1] - LOOKOUT.z) < 17.5) {
-      gateIndex = i;
-      break;
-    }
-  }
   const [gxf, gzf] = path[gateIndex];
   const [axf, azf] = path[Math.min(path.length - 1, gateIndex + 6)];
   const gate = {
@@ -192,12 +227,9 @@ export function generate() {
   // A little pier at the spawn beach, so the start reads as a place.
   pier(grid, SPAWN.x - 6, SPAWN.z + 4);
 
-  // Anchor each memory to real ground.
-  const usable = gateIndex - 6;
+  // Anchor each memory to the pad that was levelled for it.
   const nodes = MEMORIES.map((m, i) => {
-    const anchor = path[Math.max(4, Math.round(8 + i * ((usable - 8) / MEMORIES.length)))];
-    const x = Math.round(anchor[0]) - 3;
-    const z = Math.round(anchor[1]) - 3;
+    const [x, z] = anchorCell(i);
     const h = grid.columnTop(x, z);
     const y = Math.max(h + 1, SEA + 1);
     // A small plinth so the object never looks like it is floating.
