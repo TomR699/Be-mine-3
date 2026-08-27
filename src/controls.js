@@ -56,9 +56,11 @@ export class Input {
     if (f === 0 && s === 0) return null;
 
     const yaw = this.orbit.yaw;
-    // Camera-forward on the ground plane.
+    // The camera sits at focus + (sin yaw, _, cos yaw) and looks back at her,
+    // so forward on the ground is the negative of that. Right is
+    // cross(forward, up) — which is +cos, -sin, not the other way round.
     const fx = -Math.sin(yaw), fz = -Math.cos(yaw);
-    const rx = -Math.cos(yaw), rz = Math.sin(yaw);
+    const rx = Math.cos(yaw), rz = -Math.sin(yaw);
     const vx = fx * f + rx * s, vz = fz * f + rz * s;
     const len = Math.hypot(vx, vz) || 1;
     return { x: vx / len, z: vz / len };
@@ -81,9 +83,11 @@ const HALF = 0.3;       // horizontal half-width
 const HEIGHT = 2.0;     // collision height
 const GRAVITY = -26;
 const JUMP = 8.4;
-const WALK = 5.2;
-const RUN = 8.6;
-const SWIM = 3.4;
+// Her legs are 0.75 m. Much above this and the cadence needed to keep the
+// feet on the ground looks frantic no matter how the cycle is tuned.
+const WALK = 2.8;
+const RUN = 5.0;
+const SWIM = 2.2;
 const ACCEL = 22;
 
 export class Player {

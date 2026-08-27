@@ -181,16 +181,22 @@ export class Character {
       }
     }
 
-    for (const s of [-1, 1]) {
-      const shoe = box(0.28, 0.16, 0.32, palette.shoes);
-      shoe.position.set(s * 0.16, 0.08, 0.02);
-      body.add(shoe);
-      if (s === -1) this.shoeL = shoe; else this.shoeR = shoe;
-    }
+    // Feet are children of the legs. Parented to the body instead they slide
+    // around underneath the stride, which is most of what makes a walk cycle
+    // look wrong.
+    const mkShoe = (leg) => {
+      const shoe = box(0.29, 0.16, 0.34, palette.shoes);
+      shoe.position.set(0, -legH + 0.08, 0.04);
+      leg.add(shoe);
+      return shoe;
+    };
+    this.shoeL = mkShoe(this.legL);
+    this.shoeR = mkShoe(this.legR);
 
     this.height = (legH + torsoH + headH + 0.2) * (palette.scale ?? 1);
     // Where the body meets a seat, in world units — used to sit her on the bench.
     this.hipHeight = legH * (palette.scale ?? 1);
+    this.legLength = legH * (palette.scale ?? 1);
     this.phase = 0;
     this.sitting = false;
   }
@@ -209,10 +215,9 @@ export class Character {
       to(this.legR.rotation, 'x', -1.42);
       to(this.armL.rotation, 'x', -0.42);
       to(this.armR.rotation, 'x', -0.42);
-      to(this.shoeL.position, 'z', 0.62);
-      to(this.shoeR.position, 'z', 0.62);
-      to(this.shoeL.position, 'y', 0.06);
-      to(this.shoeR.position, 'y', 0.06);
+      // thighs forward, so the feet need to come back level with the ground
+      to(this.shoeL.rotation, 'x', 1.35);
+      to(this.shoeR.rotation, 'x', 1.35);
       to(this.head.rotation, 'z', 0);
       // a slow breath, so they aren't statues
       this.phase += dt * 0.9;
@@ -221,7 +226,15 @@ export class Character {
     }
 
     const moving = speed > 0.15;
-    this.phase += dt * (moving ? 6 + speed * 1.4 : 3);
+
+    // How far the legs swing, and therefore how far one stride carries her.
+    // Deriving the stride from the swing rather than picking both separately
+    // is what stops the feet skating: a foot planted at the front of the
+    // swing travels backwards at exactly ground speed.
+    const amp = 0.34 + Math.min(0.5, speed * 0.09);
+    const stride = 4 * this.legLength * Math.sin(amp);
+    if (moving) this.phase += (speed * dt) * ((Math.PI * 2) / stride);
+    else this.phase += dt * 2.2;
 
     if (!grounded) {
       const a = 0.7;
@@ -232,20 +245,19 @@ export class Character {
     }
 
     if (moving) {
-      const swing = Math.sin(this.phase) * Math.min(0.95, 0.35 + speed * 0.12);
+      const swing = Math.sin(this.phase) * amp;
       this.legL.rotation.x = swing;
       this.legR.rotation.x = -swing;
-      this.armL.rotation.x = -swing * 0.8;
-      this.armR.rotation.x = swing * 0.8;
-      this.shoeL.position.z = 0.02 + Math.sin(this.phase) * 0.14;
-      this.shoeR.position.z = 0.02 - Math.sin(this.phase) * 0.14;
-      this.shoeL.position.y = 0.08 + Math.max(0, Math.sin(this.phase)) * 0.1;
-      this.shoeR.position.y = 0.08 + Math.max(0, -Math.sin(this.phase)) * 0.1;
-      // a small bounce on each footfall
-      this.body.position.y = Math.abs(Math.sin(this.phase)) * 0.06;
+      this.armL.rotation.x = -swing * 0.7;
+      this.armR.rotation.x = swing * 0.7;
+      // The ankle keeps the foot flatter than the shin it hangs from.
+      this.shoeL.rotation.x = -swing * 0.55;
+      this.shoeR.rotation.x = swing * 0.55;
+      // A dip at each footfall — twice per cycle, which is what abs() gives.
+      this.body.position.y = -Math.abs(Math.sin(this.phase)) * 0.045;
       // long hair lags behind the stride
       if (this.palette.longHair) {
-        this.head.rotation.z = Math.sin(this.phase) * 0.05;
+        this.head.rotation.z = Math.sin(this.phase) * 0.035;
       }
     } else {
       // idle: breathe, and let the arms settle
@@ -254,10 +266,8 @@ export class Character {
       this.legR.rotation.x += (0 - this.legR.rotation.x) * ease;
       this.armL.rotation.x += (0 - this.armL.rotation.x) * ease;
       this.armR.rotation.x += (0 - this.armR.rotation.x) * ease;
-      this.shoeL.position.z += (0.02 - this.shoeL.position.z) * ease;
-      this.shoeR.position.z += (0.02 - this.shoeR.position.z) * ease;
-      this.shoeL.position.y += (0.08 - this.shoeL.position.y) * ease;
-      this.shoeR.position.y += (0.08 - this.shoeR.position.y) * ease;
+      this.shoeL.rotation.x += (0 - this.shoeL.rotation.x) * ease;
+      this.shoeR.rotation.x += (0 - this.shoeR.rotation.x) * ease;
       this.body.position.y = Math.sin(this.phase * 0.6) * 0.02;
       if (this.palette.longHair) {
         this.head.rotation.z += (0 - this.head.rotation.z) * ease;

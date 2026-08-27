@@ -35,6 +35,11 @@ Any static server works. On GitHub Pages it just works, no configuration.
 
 The camera is free — orbit, zoom, the lot.
 
+`WALK` in `src/controls.js` is the dial if the pace feels wrong. Her legs are
+0.75 m, and keeping her feet on the ground at a given speed fixes the cadence —
+so a higher walk speed necessarily means a faster stride, no matter how the
+animation is tuned. Lower `WALK` for a calmer walk.
+
 ## Layout
 
 ```
