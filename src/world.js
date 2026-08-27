@@ -124,7 +124,7 @@ export function generate() {
         if (y < h - 3) id = B.STONE;
         else if (y < h) id = B.DIRT;
         else if (h <= SEA) id = B.SAND;
-        else if (h > 26) id = B.SNOW;
+        else if (h > 34) id = B.SNOW;
         else id = pathMask[i] ? B.PATH : B.GRASS;
         grid.set(x, y, z, id);
       }
@@ -166,6 +166,8 @@ export function generate() {
     const x = Math.round(px) + 3, z = Math.round(pz) + 3;
     const h = grid.columnTop(x, z);
     if (h < SEA) continue;
+    // Keep the top clear: a lamp near the bench stands right in the final shot.
+    if (Math.hypot(x - LOOKOUT.x, z - LOOKOUT.z) < 22) continue;
     lamps.push({ x: x + 0.5, y: h + 1, z: z + 0.5 });
   }
 

@@ -107,8 +107,8 @@ export function buildLowPolyTerrain(height, pathMask, sx, sz) {
       if (pathMask[i]) c.copy(PALETTE.path);
       else if (h <= SEA) c.copy(PALETTE.sand);
       else if (h <= SEA + 1) c.copy(PALETTE.sand).lerp(PALETTE.grass, 0.35);
-      else if (h > 26) c.copy(PALETTE.snow);
-      else if (h > 21) c.copy(PALETTE.rock);
+      else if (h > 34) c.copy(PALETTE.snow);
+      else if (h > 30) c.copy(PALETTE.rock);
       else c.copy(PALETTE.grass).lerp(PALETTE.grassDry, jitter(x, z, 1.4) - 0.3);
       c.multiplyScalar(jitter(x + 7, z * 3, 0.11));
 

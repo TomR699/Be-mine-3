@@ -189,11 +189,37 @@ export class Character {
     }
 
     this.height = (legH + torsoH + headH + 0.2) * (palette.scale ?? 1);
+    // Where the body meets a seat, in world units — used to sit her on the bench.
+    this.hipHeight = legH * (palette.scale ?? 1);
     this.phase = 0;
+    this.sitting = false;
   }
+
+  /** Sitting: thighs forward from the hip, feet down, hands in the lap. */
+  setSitting(on) { this.sitting = on; }
 
   /** speed is horizontal m/s; grounded toggles the airborne pose. */
   update(dt, speed, grounded) {
+    if (this.sitting) {
+      const ease = 1 - Math.pow(0.0001, dt);
+      const to = (part, prop, target) => {
+        part[prop] += (target - part[prop]) * ease;
+      };
+      to(this.legL.rotation, 'x', -1.42);
+      to(this.legR.rotation, 'x', -1.42);
+      to(this.armL.rotation, 'x', -0.42);
+      to(this.armR.rotation, 'x', -0.42);
+      to(this.shoeL.position, 'z', 0.62);
+      to(this.shoeR.position, 'z', 0.62);
+      to(this.shoeL.position, 'y', 0.06);
+      to(this.shoeR.position, 'y', 0.06);
+      to(this.head.rotation, 'z', 0);
+      // a slow breath, so they aren't statues
+      this.phase += dt * 0.9;
+      this.body.position.y = Math.sin(this.phase) * 0.018;
+      return;
+    }
+
     const moving = speed > 0.15;
     this.phase += dt * (moving ? 6 + speed * 1.4 : 3);
 

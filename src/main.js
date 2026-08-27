@@ -218,9 +218,50 @@ const him = new Character(HIM);
 const lookoutTop = LOWPOLY
   ? groundAt(world.lookout.x + 0.5, world.lookout.z + 0.5) - 1
   : world.grid.columnTop(world.lookout.x, world.lookout.z);
-him.root.position.set(world.lookout.x + 0.5, lookoutTop + 1, world.lookout.z + 0.5);
-him.root.rotation.y = Math.PI;
 scene.add(him.root);
+
+// The bench at the top. She reads about a bench above a town, then climbs to
+// one — the last memory before the gate is the place the ending happens.
+// The bench faces out over the island, because that's the view. Its local +Z
+// is the front, so its rotation is simply the direction they look.
+const viewDir = new THREE.Vector3(
+  SX / 2 - world.lookout.x, 0, SZ / 2 - world.lookout.z
+).normalize();
+const benchFacing = Math.atan2(viewDir.x, viewDir.z);
+
+// Out at the lip of the mesa rather than the middle of it, so what's past
+// them is the drop and the valley instead of more hilltop.
+const benchX = world.lookout.x + 0.5 + viewDir.x * 8;
+const benchZ = world.lookout.z + 0.5 + viewDir.z * 8;
+const benchY = LOWPOLY
+  ? groundAt(benchX, benchZ)
+  : world.grid.columnTop(Math.floor(benchX), Math.floor(benchZ)) + 1;
+const benchPos = new THREE.Vector3(benchX, benchY, benchZ);
+
+const lookoutBench = makeProp('bench');
+lookoutBench.position.copy(benchPos);
+lookoutBench.rotation.y = benchFacing;
+scene.add(lookoutBench);
+
+// Seats, offset along the bench's local X. The seat surface sits ~0.5 above
+// the bench origin, and a character meets a seat at its hip.
+const SEAT_TOP = 0.5;
+function seatAt(localX, character) {
+  const c = Math.cos(benchFacing), s = Math.sin(benchFacing);
+  return {
+    x: benchPos.x + localX * c,
+    z: benchPos.z - localX * s,
+    y: benchPos.y + SEAT_TOP - character.hipHeight,
+  };
+}
+
+// He's been sitting there the whole time, which is a nice thing to catch sight
+// of from down on the path long before she gets up there.
+const seatHim = seatAt(-0.4, him);
+const seatHer = seatAt(0.42, her);
+him.root.position.set(seatHim.x, seatHim.y, seatHim.z);
+him.root.rotation.y = benchFacing;
+him.setSitting(true);
 
 // --- the gate ------------------------------------------------------------
 const gate = makeGate(world.gate.x, world.gate.y, world.gate.z, world.gate.facing);
@@ -241,13 +282,6 @@ scene.add(townLights.points);
 
 const meteors = makeMeteors(7);
 scene.add(meteors.lines);
-
-// The bench at the top. She reads about a bench above a town, then climbs to
-// one — the last memory before the gate is the place the ending happens.
-const lookoutBench = makeProp('bench');
-lookoutBench.position.set(world.lookout.x + 2.4, lookoutTop + 1, world.lookout.z + 1.2);
-lookoutBench.rotation.y = Math.PI * 0.85;
-scene.add(lookoutBench);
 
 // --- input & player -----------------------------------------------------
 const input = new Input(renderer.domElement);
@@ -310,12 +344,8 @@ function markFound(n, silent) {
 // --- the ending ----------------------------------------------------------
 const ending = new Ending({
   scene, camera, her, him, player, gate,
-  ui: {
-    letterbox: ui.letterbox, line: ui.line, ask: ui.ask,
-    question: ui.question, yes: ui.yes, other: ui.other,
-    hud: [ui.counter, ui.hint],
-  },
-  onRelease: () => { follow.initialised = false; },
+  bench: { x: benchPos.x, y: benchPos.y, z: benchPos.z, facing: benchFacing, seatHer, seatHim },
+  ui: { letterbox: ui.letterbox, hud: [ui.counter, ui.hint] },
 });
 
 function checkGate() {
@@ -357,14 +387,18 @@ function toggleJournal() {
 }
 
 addEventListener('keydown', (e) => {
-  if (e.code === 'Space' && ending.locksInput) { ending.nudge(); return; }
+  // No words, no buttons — but Enter during the bench scene sets off the
+  // hearts, if she says yes and you want the sky to say something.
+  if (e.code === 'Enter' && ending.state === 'seated') { ending.celebrate(); return; }
+  if (e.code === 'Space' && ending.locksInput) return;
 
   // Rehearsal shortcut: jump to the ending with everything found. For your
   // dry run, and for the unthinkable case of something going wrong in the room.
   if (e.code === 'KeyE' && e.ctrlKey && e.shiftKey) {
     nodeObjects.forEach((n) => { if (!n.node.found) markFound(n); });
     const l = world.lookout;
-    player.pos.set(l.x + 0.5, world.grid.columnTop(l.x, l.z) + 1, l.z + 5);
+    const ry = LOWPOLY ? groundAt(l.x + 0.5, l.z + 0.5) : world.grid.columnTop(l.x, l.z) + 1;
+    player.pos.set(l.x + 0.5, ry, l.z + 0.5);
     player.vel.set(0, 0, 0);
     return;
   }
@@ -404,12 +438,15 @@ function frame() {
     player.update(dt, input);
   }
   gate.update(dt);
-  ending.update(dt, t);
+  ending.update(dt);
   ending.checkApproach();
 
   // Physics is blocky, the ground is smooth: drop her onto what she can see.
   let renderY = player.pos.y;
-  if (LOWPOLY) {
+  if (ending.forcedY !== null) {
+    renderY = ending.forcedY;
+    smoothY = renderY;
+  } else if (LOWPOLY) {
     const g = groundAt(player.pos.x, player.pos.z);
     const want = player.grounded ? g : Math.max(player.pos.y, g);
     smoothY = smoothY === null ? want : smoothY + (want - smoothY) * Math.min(1, dt * 16);
@@ -477,7 +514,7 @@ function frame() {
   const focusDist = camera.position.distanceTo(her.root.position);
   dof.uniforms.focus.value += (focusDist - dof.uniforms.focus.value) * Math.min(1, dt * 2.5);
   // The ending is intimate: tighter focus, more falloff.
-  const wantAperture = ending.inControlOfCamera ? 0.00045 : 0.00016;
+  const wantAperture = ending.inControlOfCamera ? 0.00022 : 0.00016;
   dof.uniforms.aperture.value +=
     (wantAperture - dof.uniforms.aperture.value) * Math.min(1, dt * 0.8);
 

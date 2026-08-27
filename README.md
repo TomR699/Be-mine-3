@@ -90,18 +90,20 @@ gets warmer and darker the more she remembers.
 
 The lookout is a mesa with cliff sides, so the carved path is the only way up
 and the gate across it genuinely blocks — she cannot simply walk around it. It
-opens when she's found `GATE_REQUIREMENT` memories (`memories.js`, currently all
-but two).
+opens when she's found `GATE_REQUIREMENT` memories.
 
-Past the gate she walks up alone. Within six metres of him the game takes over:
-control locks, letterbox bars come in, she walks the last two paces herself and
-turns to face him, and the camera drifts in closer with each line. Then the
-question, and two buttons — `Yes`, and `Ask me again out loud`, which is not a
-rejection but a hand-off to the room you're both sitting in. Yes gets a burst of
-hearts; the other releases control back and leaves you standing together.
+Past the gate she climbs alone. At the lip of the mesa there's a bench facing
+out over the island, and he's been sitting on it the whole game — visible from
+down on the path long before she gets there. Cresting the top starts it:
+control locks, letterbox bars come in, she walks the last few paces herself and
+sits down next to him. The camera settles behind them, framing the valley, and
+pushes in very slowly.
 
-`Ctrl`+`Shift`+`E` jumps straight there with everything found. That's for your
-dry run — and for the unthinkable case of something going wrong in the moment.
+Then nothing. No lines, no question, no buttons. **That's the point — the
+talking happens in the room.** If she says yes and you want the sky to agree,
+`Enter` sets off a burst of hearts.
+
+`Ctrl`+`Shift`+`E` jumps straight there with everything found.
 
 ## What's left
 

@@ -14,25 +14,21 @@ import { ENDING_LINES, THE_QUESTION, YES_LABEL, OTHER_LABEL } from './memories.j
  */
 export class Ending {
   constructor(opts) {
-    Object.assign(this, opts); // scene, camera, her, him, player, gate, ui, onRelease
+    // scene, camera, her, him, player, gate, bench, ui, onRelease
+    Object.assign(this, opts);
     this.state = 'locked';
-    this.lineIndex = -1;
     this.timer = 0;
-    this.camAngle = 0;
     this.mark = new THREE.Vector3();
     this.hearts = null;
-
-    this.ui.yes.addEventListener('click', () => this.answer('yes'));
-    this.ui.other.addEventListener('click', () => this.answer('other'));
+    this.forcedY = null;
+    this.camPush = 0;
   }
 
   get inControlOfCamera() {
-    return this.state === 'cinematic' || this.state === 'question' || this.state === 'answered';
+    return this.state === 'walking' || this.state === 'seated';
   }
 
-  get locksInput() {
-    return this.inControlOfCamera;
-  }
+  get locksInput() { return this.inControlOfCamera; }
 
   /** Called once, when she's found enough. */
   unlock() {
@@ -41,80 +37,112 @@ export class Ending {
     this.gate.open();
   }
 
-  /** Distance at which walking up to him starts the sequence. */
+  /** Walking up to the bench is what starts it. */
   checkApproach() {
     if (this.state !== 'open') return;
-    const d = this.her.root.position.distanceTo(this.him.root.position);
-    if (d > 6) return;
+    const b = this.bench;
+    const d = Math.hypot(this.her.root.position.x - b.x, this.her.root.position.z - b.z);
+    // Wide enough that cresting the mesa is what starts it: she comes over the
+    // top, sees him on the bench, and the game takes over from there.
+    if (d > 9.5) return;
     this.begin();
   }
 
   begin() {
-    this.state = 'cinematic';
+    this.state = 'walking';
     this.timer = 0;
-    this.lineIndex = -1;
-
-    // Her mark: a couple of paces in front of him, facing him.
-    const him = this.him.root.position;
-    const from = this.her.root.position;
-    const dir = new THREE.Vector3().subVectors(from, him).setY(0).normalize();
-    this.mark.copy(him).addScaledVector(dir, 2.1);
-    this.mark.y = him.y;
-
-    this.camAngle = Math.atan2(from.x - him.x, from.z - him.z) + 1.1;
-
+    this.mark.set(this.bench.seatHer.x, this.bench.seatHer.y, this.bench.seatHer.z);
     this.ui.letterbox.hidden = false;
     this.ui.hud.forEach((el) => { el.hidden = true; });
     document.body.classList.add('cinematic');
   }
 
-  advanceLine() {
-    this.lineIndex++;
-    if (this.lineIndex < ENDING_LINES.length) {
-      this.ui.line.textContent = ENDING_LINES[this.lineIndex];
-      this.ui.line.hidden = false;
-      // restart the fade
-      this.ui.line.classList.remove('show');
-      void this.ui.line.offsetWidth;
-      this.ui.line.classList.add('show');
-      this.timer = 0;
-    } else {
-      this.ask();
+  sit() {
+    this.state = 'seated';
+    this.timer = 0;
+    this.her.setSitting(true);
+    this.player.speed = 0;
+    this.player.yaw = this.bench.facing;
+    this.player.pos.set(this.mark.x, this.player.pos.y, this.mark.z);
+    // Her rendered height is the seat, not the ground she was standing on.
+    this.forcedY = this.bench.seatHer.y;
+  }
+
+  update(dt) {
+    if (this.hearts) this.updateHearts(dt);
+
+    if (this.state === 'walking') this.updateWalking(dt);
+    else if (this.state === 'seated') this.timer += dt;
+
+    if (this.inControlOfCamera) this.updateCamera(dt);
+  }
+
+  updateWalking(dt) {
+    this.timer += dt;
+    const pos = this.player.pos;
+    const dx = this.mark.x - pos.x, dz = this.mark.z - pos.z;
+    const dist = Math.hypot(dx, dz);
+
+    if (dist > 0.14) {
+      const step = Math.min(dist, 1.75 * dt);
+      pos.x += (dx / dist) * step;
+      pos.z += (dz / dist) * step;
+      this.player.speed = 1.75;
+      this.player.yaw = Math.atan2(dx, dz);
+      return;
     }
+    this.sit();
   }
 
-  ask() {
-    this.state = 'question';
-    this.ui.line.hidden = true;
-    this.ui.question.textContent = THE_QUESTION;
-    this.ui.yes.textContent = YES_LABEL;
-    this.ui.other.textContent = OTHER_LABEL;
-    this.ui.ask.hidden = false;
-    this.ui.yes.focus();
-  }
+  /**
+   * The held shot: over their shoulders, out across the valley. It pushes in
+   * very slowly and then stops. Nothing else happens — from here it's his.
+   */
+  updateCamera(dt) {
+    const b = this.bench;
+    const fx = Math.sin(b.facing), fz = Math.cos(b.facing);   // the way they face
 
-  answer(which) {
-    if (this.state !== 'question') return;
-    this.state = 'answered';
-    this.ui.ask.hidden = true;
-
-    if (which === 'yes') {
-      this.ui.line.textContent = '';
-      this.ui.line.hidden = true;
-      this.celebrate();
-    } else {
-      // Not a rejection — it hands the moment back to the room.
-      this.ui.line.textContent = 'Then ask me.';
-      this.ui.line.hidden = false;
-      this.ui.line.classList.add('show');
-      this.timer = 0;
-      this.release = 3.2;
+    if (this.state === 'walking') {
+      // Hold wide while she comes up the path, already looking at the bench.
+      const want = new THREE.Vector3(
+        b.x - fx * 7.5 + fz * 3.5, b.y + 3.4, b.z - fz * 7.5 - fx * 3.5
+      );
+      this.camera.position.lerp(want, Math.min(1, dt * 1.2));
+      this._look = this._look || new THREE.Vector3(b.x, b.y + 1.2, b.z);
+      this._look.lerp(new THREE.Vector3(b.x, b.y + 1.2, b.z), Math.min(1, dt * 2));
+      this.camera.lookAt(this._look);
+      return;
     }
+
+    // Seated: settle behind and above them, framing the town beyond.
+    this.camPush = Math.min(1, this.camPush + dt * 0.045);
+    const ease = 1 - Math.pow(1 - this.camPush, 3);
+    const back = 6.4 - ease * 2.1;
+    const high = 3.0 - ease * 0.75;
+
+    const want = new THREE.Vector3(
+      b.x - fx * back + fz * 1.1,
+      b.y + high,
+      b.z - fz * back - fx * 1.1
+    );
+    this.camera.position.lerp(want, Math.min(1, dt * 1.1));
+
+    const target = new THREE.Vector3(
+      b.x + fx * 7, b.y + 1.5 - ease * 0.5, b.z + fz * 7
+    );
+    this._look = this._look || target.clone();
+    this._look.lerp(target, Math.min(1, dt * 1.4));
+    this.camera.lookAt(this._look);
   }
 
+  /**
+   * Optional. There are no words and no buttons in this ending — but if she
+   * says yes and you want the sky to agree, Enter sets off the hearts.
+   */
   celebrate() {
-    // A burst of hearts over the two of them.
-    const N = 160;
+    if (this.state !== 'seated' || this.hearts) return;
+
+    const N = 180;
     const geo = new THREE.BufferGeometry();
     const pos = new Float32Array(N * 3);
     const vel = [];
@@ -139,111 +167,19 @@ export class Ending {
     this.hearts.userData.vel = vel;
     this.hearts.userData.age = 0;
     this.scene.add(this.hearts);
-
-    this.ui.line.textContent = '';
-    setTimeout(() => {
-      this.ui.line.textContent = '♥';
-      this.ui.line.hidden = false;
-      this.ui.line.classList.add('show');
-    }, 900);
   }
 
-  update(dt, t) {
-    if (this.hearts) {
-      const h = this.hearts;
-      h.userData.age += dt;
-      const p = h.geometry.attributes.position;
-      for (let i = 0; i < p.count; i++) {
-        const v = h.userData.vel[i];
-        v.y -= 7 * dt;
-        p.setXYZ(i, p.getX(i) + v.x * dt, p.getY(i) + v.y * dt, p.getZ(i) + v.z * dt);
-      }
-      p.needsUpdate = true;
-      h.material.opacity = Math.max(0, 1 - h.userData.age / 4.5);
+  updateHearts(dt) {
+    const h = this.hearts;
+    h.userData.age += dt;
+    const p = h.geometry.attributes.position;
+    for (let i = 0; i < p.count; i++) {
+      const v = h.userData.vel[i];
+      v.y -= 7 * dt;
+      p.setXYZ(i, p.getX(i) + v.x * dt, p.getY(i) + v.y * dt, p.getZ(i) + v.z * dt);
     }
-
-    if (this.state === 'cinematic') this.updateCinematic(dt);
-    else if (this.state === 'answered' && this.release !== undefined) {
-      this.timer += dt;
-      if (this.timer > this.release) {
-        this.release = undefined;
-        this.finishAndRelease();
-      }
-    }
-
-    if (this.inControlOfCamera) this.updateCamera(dt);
-  }
-
-  updateCinematic(dt) {
-    this.timer += dt;
-
-    // She walks the last couple of paces herself.
-    const pos = this.player.pos;
-    const to = new THREE.Vector3(this.mark.x - pos.x, 0, this.mark.z - pos.z);
-    const dist = to.length();
-    if (dist > 0.12) {
-      to.normalize();
-      const step = Math.min(dist, 1.9 * dt);
-      pos.x += to.x * step;
-      pos.z += to.z * step;
-      this.player.speed = 1.9;
-      this.player.yaw = Math.atan2(to.x, to.z);
-      return;
-    }
-
-    this.player.speed = 0;
-    // Turn to face him, then start talking.
-    const him = this.him.root.position;
-    this.player.yaw = Math.atan2(him.x - pos.x, him.z - pos.z);
-    this.him.root.rotation.y = Math.atan2(pos.x - him.x, pos.z - him.z);
-
-    if (this.lineIndex === -1) {
-      if (this.timer > 1.1) this.advanceLine();
-      return;
-    }
-    if (this.timer > 3.4) this.advanceLine();
-  }
-
-  /** Space or click moves the lines along, for a reader who wants to go faster. */
-  nudge() {
-    if (this.state === 'cinematic' && this.lineIndex >= 0 && this.timer > 0.6) {
-      this.advanceLine();
-    }
-  }
-
-  updateCamera(dt) {
-    const a = this.her.root.position, b = this.him.root.position;
-    const mid = new THREE.Vector3().addVectors(a, b).multiplyScalar(0.5);
-    mid.y += 1.5;
-
-    // Slow drift around the pair, easing closer as the lines land.
-    this.camAngle += dt * 0.09;
-    const closeness = this.state === 'cinematic'
-      ? Math.max(0, Math.min(1, (this.lineIndex + 1) / (ENDING_LINES.length + 1)))
-      : 1;
-    const dist = 8.2 - closeness * 3.0;
-    const height = 2.6 - closeness * 0.7;
-
-    const want = new THREE.Vector3(
-      mid.x + Math.sin(this.camAngle) * dist,
-      mid.y + height,
-      mid.z + Math.cos(this.camAngle) * dist
-    );
-
-    this.camera.position.lerp(want, Math.min(1, dt * 1.6));
-    this._look = this._look || mid.clone();
-    this._look.lerp(mid, Math.min(1, dt * 3));
-    this.camera.lookAt(this._look);
-  }
-
-  finishAndRelease() {
-    this.state = 'open';
-    this.ui.line.hidden = true;
-    this.ui.letterbox.hidden = true;
-    this.ui.hud.forEach((el) => { el.hidden = false; });
-    document.body.classList.remove('cinematic');
-    this._look = null;
-    if (this.onRelease) this.onRelease();
+    p.needsUpdate = true;
+    h.material.opacity = Math.max(0, 1 - h.userData.age / 5);
   }
 }
 
