@@ -537,6 +537,24 @@ export const HERO_OFFSET = {
   meteors: [0, 0.4, 0.6],              // the star hangs over the blanket
 };
 
+/**
+ * Roughly how much flat ground each set needs, in blocks. The terrain
+ * generator uses this to cut a terrace of the right size — a set that
+ * overhangs its terrace ends up half-buried at one end.
+ */
+export const SET_RADIUS = {
+  'first-chat': 9,
+  'outside-the-club': 12,
+  'kitchen-5am': 9,
+  tennis: 11,
+  'the-gym': 10,
+  nandos: 10,
+  meteors: 7,
+  badminton: 10,
+  'the-bench': 9,
+  'first-nights': 9,
+};
+
 /** Build the set for a memory id, or null if it has no dressing. */
 export function makeSet(id) {
   const build = BUILDERS[id];

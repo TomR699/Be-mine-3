@@ -82,6 +82,20 @@ rather than voxels, because a full-block flower looks like chewing gum and a
 full-block lamp post looks like a wall. Flowers are instanced, so hundreds of
 them cost two draw calls.
 
+**Checkpoints are sited, not stamped.** For each memory the generator sweeps a
+fan of candidate positions either side of the path and scores them on how flat
+the island already is there, how far they sit from the path, and how far from
+the other checkpoints. Candidates with any path inside their footprint are
+rejected outright unless nothing else qualifies — the path loops back on itself,
+so being clear of the stretch you arrived on is no guarantee. The winner gets a
+terrace cut into the hillside with an eased rim whose radius wobbles with angle,
+so it reads as a natural shoulder rather than a circular plateau. The carved
+path is never re-cut: it is the only route to the gate.
+
+Each set then faces back toward the path, so it opens to the direction she
+arrives from. `SET_RADIUS` in `sets.js` is how each set tells the generator how
+much flat ground it needs.
+
 **Each checkpoint is a dressed set.** `sets.js` builds the scenery around every
 memory — a tennis court with a net and lines, a gym floor with a squat rack, a
 club frontage with a smoking pen. Each stands on its own floor (decking, paving,

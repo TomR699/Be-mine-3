@@ -176,9 +176,8 @@ if (LOWPOLY) {
 scene.add(makeFlowerField(world.flowers));
 
 // Memory checkpoints: a dressed set, with the memory's own object as its hero.
-// Every node sits back from the path by the same offset, so every set turns the
-// same way — toward the path she walks in on.
-const SET_FACING = Math.PI / 4;
+// Each node carries the facing chosen when its terrace was cut, so every set
+// opens toward the stretch of path she actually arrives from.
 
 const nodeObjects = [];
 for (const node of world.nodes) {
@@ -188,7 +187,7 @@ for (const node of world.nodes) {
   // Everything sits inside a rotated container, so hero offsets can be written
   // in the set's own space rather than pre-rotated by hand.
   const dress = new THREE.Group();
-  dress.rotation.y = SET_FACING;
+  dress.rotation.y = node.facing ?? 0;
   group.add(dress);
 
   const set = makeSet(node.id);

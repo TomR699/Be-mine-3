@@ -1,5 +1,6 @@
 import { B, Grid } from './voxel.js';
 import { MEMORIES } from './memories.js';
+import { SET_RADIUS } from './sets.js';
 
 export const SX = 128, SY = 40, SZ = 128;
 export const SEA = 6;
@@ -114,9 +115,8 @@ export function generate() {
     }
   }
 
-  // Where the gate goes, and where each checkpoint sits. Both are needed before
-  // the columns are filled, because the checkpoints flatten the ground first —
-  // a dressed set on a slope is half-buried at one end and floating at the other.
+  // Where the gate goes. Needed early, because the checkpoints are placed
+  // relative to it and the terrain is cut for them before columns are filled.
   let gateIndex = path.length - 1;
   for (let i = 0; i < path.length; i++) {
     if (Math.hypot(path[i][0] - LOOKOUT.x, path[i][1] - LOOKOUT.z) < 17.5) {
@@ -126,37 +126,139 @@ export function generate() {
   }
 
   const usable = gateIndex - 6;
-  const anchorCell = (i) => {
-    const a = path[Math.max(4, Math.round(8 + i * ((usable - 8) / MEMORIES.length)))];
-    return [Math.round(a[0]) - 3, Math.round(a[1]) - 3];
-  };
+  const anchorIndex = (i) =>
+    Math.max(4, Math.round(8 + i * ((usable - 8) / MEMORIES.length)));
 
-  // Level a pad under each set, blending out at the rim so it isn't a plateau.
-  const setMask = new Uint8Array(SX * SZ);
-  // Anything within this of a checkpoint is kept clear of trees. The pad's flat
-  // core is smaller than the set, so masking on that alone left trees standing
-  // through the middle of the buildings.
-  const setCells = [];
-  const PAD = 12;   // the sets are up to ~16 across; the pad has to clear them
+  // How uneven is the ground here? Sites are chosen by looking for somewhere
+  // the island is already flattish, rather than bulldozing wherever we land.
+  function roughness(cx, cz, r) {
+    let lo = Infinity, hi = -Infinity;
+    for (let dz = -r; dz <= r; dz += 2) {
+      for (let dx = -r; dx <= r; dx += 2) {
+        const x = cx + dx, z = cz + dz;
+        if (x < 0 || z < 0 || x >= SX || z >= SZ) return 99;
+        const h = height[x + z * SX];
+        if (h < lo) lo = h;
+        if (h > hi) hi = h;
+      }
+    }
+    return hi - lo;
+  }
+
+  /**
+   * Pick a site for each checkpoint: out to one side of the path, on the
+   * flattest ground within reach, not on top of another site and not in the
+   * sea. The facing is then simply "back toward the path", so every set opens
+   * to the direction she arrives from.
+   */
+  const sites = [];
   for (let i = 0; i < MEMORIES.length; i++) {
-    const [ax, az] = anchorCell(i);
-    if (ax < 0 || az < 0 || ax >= SX || az >= SZ) continue;
-    setCells.push([ax, az]);
-    const target = height[ax + az * SX];
-    for (let dz = -PAD; dz <= PAD; dz++) {
-      for (let dx = -PAD; dx <= PAD; dx++) {
-        const x = ax + dx, z = az + dz;
-        if (x < 0 || z < 0 || x >= SX || z >= SZ) continue;
-        const dist = Math.hypot(dx, dz);
-        if (dist > PAD) continue;
-        const k = x + z * SX;
-        if (dist <= PAD - 3) {
-          height[k] = target;
-          setMask[k] = 1;
-        } else {
-          const blend = (PAD - dist) / 3;
-          height[k] = Math.round(height[k] * (1 - blend) + target * blend);
+    const pi = anchorIndex(i);
+    const [px, pz] = path[pi];
+    const [ax, az] = path[Math.min(path.length - 1, pi + 5)];
+    const tx = ax - px, tz = az - pz;
+    const tl = Math.hypot(tx, tz) || 1;
+    const perpX = -tz / tl, perpZ = tx / tl;      // across the path
+
+    const radius = SET_RADIUS[MEMORIES[i].id] ?? 9;
+    let best = null;
+    const clear = [];       // candidates with no path inside the footprint
+    const compromised = []; // everything else, in case nothing is clear
+
+    // Sweep a fan either side of the path rather than just straight out from
+    // it. Where the path loops back on itself the two perpendiculars can both
+    // be blocked, and a wider search finds the shoulder that isn't.
+    for (const side of [1, -1]) {
+      for (let sweep = -50; sweep <= 50; sweep += 12.5) {
+        const a = (sweep * Math.PI) / 180;
+        const dirX = perpX * side * Math.cos(a) + (tx / tl) * Math.sin(a);
+        const dirZ = perpZ * side * Math.cos(a) + (tz / tl) * Math.sin(a);
+
+        for (let d = radius * 0.95; d <= radius * 1.45; d += 1.2) {
+          const cx = Math.round(px + dirX * d);
+          const cz = Math.round(pz + dirZ * d);
+          if (cx - radius < 1 || cz - radius < 1) continue;
+          if (cx + radius >= SX - 1 || cz + radius >= SZ - 1) continue;
+
+          const h = height[cx + cz * SX];
+          if (h <= SEA + 1) continue;               // not in the water
+          if (h > 24) continue;                     // not up the mesa
+
+          const rp = Math.round(radius * 0.85);
+          let onPath = 0;
+          for (let dz = -rp; dz <= rp; dz += 2) {
+            for (let dx = -rp; dx <= rp; dx += 2) {
+              if (Math.hypot(dx, dz) > rp) continue;
+              const qx = cx + dx, qz = cz + dz;
+              if (qx < 0 || qz < 0 || qx >= SX || qz >= SZ) continue;
+              if (pathMask[qx + qz * SX]) onPath++;
+            }
+          }
+
+          let score = -roughness(cx, cz, Math.round(radius * 0.6)) * 3;
+          score -= Math.abs(d - radius * 1.15) * 0.6;   // sit about a radius out
+          score -= Math.abs(sweep) * 0.02;              // prefer square to the path
+          for (const other of sites) {
+            const gap = Math.hypot(cx - other.x, cz - other.z);
+            const want = radius + other.radius + 6;
+            if (gap < want) score -= (want - gap) * 8;
+          }
+
+          // Two sets close enough to overlap read as one confused place, so
+          // separation is a requirement rather than a preference.
+          const crowded = sites.some((o) =>
+            Math.hypot(cx - o.x, cz - o.z) < radius + o.radius + 5);
+
+          const cand = { x: cx, z: cz, radius, score };
+          if (onPath === 0 && !crowded) clear.push(cand);
+          else {
+            cand.score -= onPath * 10 + (crowded ? 60 : 0);
+            compromised.push(cand);
+          }
         }
+      }
+    }
+
+    const pool = clear.length ? clear : compromised;
+    for (const c of pool) if (!best || c.score > best.score) best = c;
+
+    // If nowhere scored (edge of the map, all sea), fall back to the old
+    // fixed offset rather than dropping a memory entirely.
+    if (!best) {
+      best = { x: Math.round(px) - 3, z: Math.round(pz) - 3, radius, score: 0 };
+    }
+    best.facing = Math.atan2(px - best.x, pz - best.z);
+    sites.push(best);
+  }
+
+  // Cut a terrace for each. The rim is eased rather than linear and its radius
+  // wobbles with angle, so it reads as a natural shoulder in the hillside
+  // instead of a circular plateau stamped on top of one.
+  const setMask = new Uint8Array(SX * SZ);
+  for (const site of sites) {
+    const target = height[site.x + site.z * SX];
+    const R = site.radius;
+    for (let dz = -R - 4; dz <= R + 4; dz++) {
+      for (let dx = -R - 4; dx <= R + 4; dx++) {
+        const x = site.x + dx, z = site.z + dz;
+        if (x < 0 || z < 0 || x >= SX || z >= SZ) continue;
+
+        const dist = Math.hypot(dx, dz);
+        if (dist < 0.001) { height[x + z * SX] = target; continue; }
+
+        const ang = Math.atan2(dz, dx);
+        const wobble = 0.88 + 0.3 * noise2(Math.cos(ang) * 1.7 + 8,
+                                           Math.sin(ang) * 1.7 + 8, 606);
+        const edge = R * wobble;
+        if (dist > edge) continue;
+
+        const u = 1 - dist / edge;                 // 1 at the centre, 0 at the rim
+        const w = u >= 0.45 ? 1 : smooth(u / 0.45);
+        const k = x + z * SX;
+        // Leave the path exactly as carved — it is the only way to the gate.
+        if (pathMask[k]) continue;
+        height[k] = Math.round(height[k] * (1 - w) + target * w);
+        if (w > 0.98) setMask[k] = 1;
       }
     }
   }
@@ -190,12 +292,12 @@ export function generate() {
       const i = x + z * SX;
       const h = height[i];
       if (h <= SEA + 1 || h > 26 || pathMask[i] || setMask[i]) continue;
-      if (setCells.some(([sx, sz]) => Math.hypot(x - sx, z - sz) < 12)) continue;
+      if (sites.some((st) => Math.hypot(x - st.x, z - st.z) < st.radius + 2)) continue;
       // Keep the camera's first view clear — a tree at spawn fills the screen.
       const nearSpawn = Math.hypot(x - SPAWN.x, z - SPAWN.z) < 9;
       const r = hash2(x, z, 4242);
       const density = fbm(x / 28, z / 28, 777, 2);
-      if (r > 0.985 - density * 0.02) {
+      if (r > 0.9755 - density * 0.02) {
         if (nearSpawn || nearPath(pathMask, x, z, 4)) continue;
         const seed = hash2(x, z, 99);
         tree(grid, x, h + 1, z, seed);
@@ -233,14 +335,14 @@ export function generate() {
   // A little pier at the spawn beach, so the start reads as a place.
   pier(grid, SPAWN.x - 6, SPAWN.z + 4);
 
-  // Anchor each memory to the pad that was levelled for it.
+  // Anchor each memory to the terrace cut for it.
   const nodes = MEMORIES.map((m, i) => {
-    const [x, z] = anchorCell(i);
+    const { x, z, facing } = sites[i];
     const h = grid.columnTop(x, z);
     const y = Math.max(h + 1, SEA + 1);
     // A small plinth so the object never looks like it is floating.
     grid.set(x, y - 1, z, B.PLANK);
-    return { ...m, x: x + 0.5, y, z: z + 0.5, found: false };
+    return { ...m, x: x + 0.5, y, z: z + 0.5, facing, found: false };
   });
 
   return { grid, height, pathMask, lamps, nodes, flowers, trees, gate, spawn: SPAWN, lookout: LOOKOUT };
