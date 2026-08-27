@@ -3,7 +3,7 @@
 A small voxel game. She plays as herself, walks an island built out of things
 you've done together, and finds you at the end of it.
 
-**Status: P2 complete, real content in.** The world, the character, the camera, and the memory
+**Status: P3 — low-poly art pass, real content in.** The world, the character, the camera, and the memory
 loop all work. The content is placeholder — see
 [what's left](#whats-left) below.
 
@@ -47,9 +47,22 @@ src/
   character.js      the voxel character rig and walk cycle
   controls.js       input, player physics, the follow camera
   props.js          memory objects, lamps, flowers
-  ending.js         the gate, the cinematic, fireflies
+  lowpoly.js        faceted terrain, trees, the ground sampler
+  ending.js         the gate, the cinematic, fireflies, meteors
   memories.js       >>> the content file — this is the one you write <<<
 ```
+
+## Art style
+
+Low-poly by default. `?style=voxel` switches back to the block renderer — both
+draw the same world from the same heightmap, so it's a true A/B and voxel stays
+a working fallback.
+
+Collision is the voxel grid in both modes. In low-poly the visible ground is
+smooth while the collider underneath is blocky, so everything that stands on
+the ground — her, the props, the lamps, the gate — is placed by `groundAt()`
+from `lowpoly.js` rather than by the block it happens to occupy. Without that
+she hovers on every slope.
 
 ## How it works
 

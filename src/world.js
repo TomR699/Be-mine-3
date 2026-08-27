@@ -135,6 +135,9 @@ export function generate() {
   // Scatter trees and flowers away from the path. Flowers come back as
   // positions, not blocks — a full-size cube flower looks like chewing gum.
   const flowers = [];
+  // Trees go into the grid (which is what gives them collision) and are also
+  // recorded, so the low-poly renderer can draw real trees at the same spots.
+  const trees = [];
   for (let z = 2; z < SZ - 2; z++) {
     for (let x = 2; x < SX - 2; x++) {
       const i = x + z * SX;
@@ -146,7 +149,9 @@ export function generate() {
       const density = fbm(x / 28, z / 28, 777, 2);
       if (r > 0.985 - density * 0.02) {
         if (nearSpawn || nearPath(pathMask, x, z, 4)) continue;
-        tree(grid, x, h + 1, z, hash2(x, z, 99));
+        const seed = hash2(x, z, 99);
+        tree(grid, x, h + 1, z, seed);
+        trees.push({ x: x + 0.5, y: h + 1, z: z + 0.5, seed });
       } else if (r < 0.014) {
         flowers.push({ x: x + 0.5, y: h + 1, z: z + 0.5, tint: hash2(x, z, 8) });
       }
@@ -198,7 +203,7 @@ export function generate() {
     return { ...m, x: x + 0.5, y, z: z + 0.5, found: false };
   });
 
-  return { grid, height, lamps, nodes, flowers, gate, spawn: SPAWN, lookout: LOOKOUT };
+  return { grid, height, pathMask, lamps, nodes, flowers, trees, gate, spawn: SPAWN, lookout: LOOKOUT };
 }
 
 function nearPath(mask, x, z, r) {

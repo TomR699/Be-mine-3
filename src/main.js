@@ -1,5 +1,13 @@
 import * as THREE from 'three';
-import { generate, SEA } from './world.js';
+import { generate, SEA, SX, SZ } from './world.js';
+import {
+  buildLowPolyTerrain, buildLowPolyWater, buildLowPolyTrees,
+  makeGroundSampler, addTreeWind,
+} from './lowpoly.js';
+
+// Art style. ?style=voxel falls back to the block renderer — the two share
+// the same world, so it is a pure A/B.
+const LOWPOLY = new URLSearchParams(location.search).get('style') !== 'voxel';
 import { buildMeshes, addWind, addWaves } from './voxel.js';
 import { Character, HER, HIM } from './character.js';
 import { Input, Player, FollowCamera } from './controls.js';
@@ -124,20 +132,46 @@ composer.addPass(new OutputPass());
 
 // --- world --------------------------------------------------------------
 const world = generate();
-const meshes = buildMeshes(world.grid);
-scene.add(meshes.opaque);
-if (meshes.water) scene.add(meshes.water);
 
-// Foliage is meshed separately so it can move in the wind.
-let advanceWind = () => {};
-if (meshes.foliage) {
-  scene.add(meshes.foliage);
-  advanceWind = addWind(meshes.foliage.material, 0.11);
+// The visible ground. In low-poly the surface is smooth while collision stays
+// blocky underneath, so everything that sits on the ground is placed by this
+// rather than by the voxel column it happens to be standing in.
+const groundAt = makeGroundSampler(world.height, SX, SZ);
+
+if (LOWPOLY) {
+  for (const n of world.nodes) n.y = groundAt(n.x, n.z);
+  for (const l of world.lamps) l.y = groundAt(l.x, l.z);
+  for (const f of world.flowers) f.y = groundAt(f.x, f.z);
+  for (const t of world.trees) t.y = groundAt(t.x, t.z) - 0.3;
+  world.gate.y = groundAt(world.gate.x, world.gate.z);
 }
 
-// The sea gets a slow swell, on the same trick.
+let advanceWind = () => {};
 let advanceWater = () => {};
-if (meshes.water) advanceWater = addWaves(meshes.water.material);
+
+if (LOWPOLY) {
+  const terrain = buildLowPolyTerrain(world.height, world.pathMask, SX, SZ);
+  scene.add(terrain);
+
+  const trees = buildLowPolyTrees(world.trees);
+  scene.add(trees);
+  advanceWind = addTreeWind(trees.material);
+
+  const water = buildLowPolyWater(SX, SZ);
+  scene.add(water);
+  advanceWater = addWaves(water.material);
+} else {
+  const meshes = buildMeshes(world.grid);
+  scene.add(meshes.opaque);
+  if (meshes.water) {
+    scene.add(meshes.water);
+    advanceWater = addWaves(meshes.water.material);
+  }
+  if (meshes.foliage) {
+    scene.add(meshes.foliage);
+    advanceWind = addWind(meshes.foliage.material, 0.11);
+  }
+}
 scene.add(makeFlowerField(world.flowers));
 
 // memory props
@@ -181,7 +215,9 @@ const her = new Character(HER);
 scene.add(her.root);
 
 const him = new Character(HIM);
-const lookoutTop = world.grid.columnTop(world.lookout.x, world.lookout.z);
+const lookoutTop = LOWPOLY
+  ? groundAt(world.lookout.x + 0.5, world.lookout.z + 0.5) - 1
+  : world.grid.columnTop(world.lookout.x, world.lookout.z);
 him.root.position.set(world.lookout.x + 0.5, lookoutTop + 1, world.lookout.z + 0.5);
 him.root.rotation.y = Math.PI;
 scene.add(him.root);
@@ -218,7 +254,7 @@ const input = new Input(renderer.domElement);
 const player = new Player(world.grid, world.spawn);
 player.spawnX = world.spawn.x + 0.5;
 player.spawnZ = world.spawn.z + 0.5;
-const follow = new FollowCamera(camera, world.grid);
+const follow = new FollowCamera(camera, world.grid, LOWPOLY ? groundAt : null);
 
 player.barriers.push({
   x: world.gate.x, z: world.gate.z, facing: world.gate.facing,
@@ -354,6 +390,7 @@ resize();
 const clock = new THREE.Clock();
 let paintedDusk = 0;
 let dusk = 0;
+let smoothY = null;
 let nearest = null;
 
 function frame() {
@@ -370,7 +407,15 @@ function frame() {
   ending.update(dt, t);
   ending.checkApproach();
 
-  her.root.position.set(player.pos.x, player.pos.y, player.pos.z);
+  // Physics is blocky, the ground is smooth: drop her onto what she can see.
+  let renderY = player.pos.y;
+  if (LOWPOLY) {
+    const g = groundAt(player.pos.x, player.pos.z);
+    const want = player.grounded ? g : Math.max(player.pos.y, g);
+    smoothY = smoothY === null ? want : smoothY + (want - smoothY) * Math.min(1, dt * 16);
+    renderY = smoothY;
+  }
+  her.root.position.set(player.pos.x, renderY, player.pos.z);
   her.faceTowards(player.yaw, dt);
   her.update(dt, noteOpen ? 0 : player.speed, player.grounded);
   him.update(dt, 0, true);
@@ -444,4 +489,4 @@ renderer.domElement.focus();
 frame();
 
 // Expose a little for tuning from the console during the build.
-window.BM = { world, player, input, scene, found, ending, gate, townLights, GATE_REQUIREMENT, SEA, nodeObjects, markFound, checkGate };
+window.BM = { world, player, input, scene, found, ending, gate, townLights, groundAt, LOWPOLY, GATE_REQUIREMENT, SEA, nodeObjects, markFound, checkGate };

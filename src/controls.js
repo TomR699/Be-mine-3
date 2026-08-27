@@ -228,9 +228,15 @@ export class Player {
 // --- camera -------------------------------------------------------------
 
 export class FollowCamera {
-  constructor(camera, grid) {
+  /**
+   * `groundAt` is optional. When the visible ground is smooth but the grid is
+   * blocky, testing the grid pulls the camera in against terrain that isn't
+   * really there — which jams it inside her head.
+   */
+  constructor(camera, grid, groundAt = null) {
     this.camera = camera;
     this.grid = grid;
+    this.groundAt = groundAt;
     this.current = new THREE.Vector3();
     this.lookAt = new THREE.Vector3();
     this.initialised = false;
@@ -250,8 +256,11 @@ export class FollowCamera {
     // Pull the camera in if terrain would sit between it and her.
     for (let d = 0.5; d <= dist; d += 0.5) {
       const p = focus.clone().addScaledVector(dir, d);
-      if (!isPassable(this.grid.get(Math.floor(p.x), Math.floor(p.y), Math.floor(p.z)))) {
-        dist = Math.max(2.2, d - 0.6);
+      const blocked = this.groundAt
+        ? p.y < this.groundAt(p.x, p.z) + 0.4
+        : !isPassable(this.grid.get(Math.floor(p.x), Math.floor(p.y), Math.floor(p.z)));
+      if (blocked) {
+        dist = Math.max(3.6, d - 0.6);
         break;
       }
     }

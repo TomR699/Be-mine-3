@@ -21,7 +21,7 @@ export const PROPS = [
   'gift', 'cup', 'boat', 'star', 'racket', 'shuttle', 'plate', 'bed', 'weights',
 ];
 
-export const MEMORIES = [
+const ALL = [
   {
     id: 'first-chat',
     prop: 'table',
@@ -105,7 +105,33 @@ export const MEMORIES = [
         + 'unreasonable quantity of snacks. The first nights I didn’t want '
         + 'to go home.',
   },
+  {
+    id: 'i-love-you',
+    prop: 'flowers',
+    // ---------------------------------------------------------------------
+    // PENDING. This one hasn't happened yet — it's set for tonight.
+    //
+    // While `pending` is true this memory does not exist: it isn't placed in
+    // the world, it isn't in the journal, and it doesn't count toward the
+    // gate. The game plays exactly as if it were never written.
+    //
+    // Tonight, if you say it: delete the `pending` line below, rewrite the
+    // text to what actually happened, and it appears. If the moment doesn't
+    // arrive, change nothing and she'll never know it was here.
+    // ---------------------------------------------------------------------
+    pending: true,
+    title: 'The night I told you',
+    when: 'tonight',
+    text: 'REWRITE ME AFTERWARDS — say where you were, and what she did when '
+        + 'you said it. That detail is the whole memory.',
+  },
 ];
+
+/**
+ * Entries marked `pending` are invisible to the entire game — not placed, not
+ * counted, not listed. It lets a memory be written before it has happened.
+ */
+export const MEMORIES = ALL.filter((m) => !m.pending);
 
 /** How many she needs before the lookout opens. */
 export const GATE_REQUIREMENT = Math.max(1, MEMORIES.length - 2);
@@ -119,6 +145,15 @@ export const ENDING_LINES = [
   'Every one of those days, I was paying attention.',
   'So there’s only one thing left to ask.',
 ];
+
+/**
+ * If you've already told her you love her by the time she plays this, these
+ * land better — swap them in above.
+ *
+ *   'You found all of it.'
+ *   'I meant what I said, and I've meant it for a while.'
+ *   'So there's one thing I still haven't actually asked you.'
+ */
 
 /** >>> DRAFT. Your words. */
 export const THE_QUESTION = 'Will you be my girlfriend?';
