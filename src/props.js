@@ -83,6 +83,43 @@ const BUILDERS = {
     g.add(b(1.1, 0.12, 0.4, DARK, 0, 0.28));
     g.add(b(0.08, 0.9, 0.08, DARK, -0.4, 0.35));
   },
+  racket(g) {
+    // tennis racket, leaning, with a ball
+    g.add(b(0.1, 0.5, 0.1, DARK, -0.25, 0));
+    g.add(b(0.34, 0.44, 0.05, 0x2f6f4f, -0.25, 0.5));
+    g.add(b(0.26, 0.36, 0.02, WHITE, -0.25, 0.54));
+    g.add(b(0.22, 0.22, 0.22, 0xd6e04a, 0.25, 0));
+  },
+  shuttle(g) {
+    // badminton: racket flat on the ground and a shuttlecock stood on its cork
+    g.add(b(0.09, 0.46, 0.09, 0x8c2f3f, -0.28, 0));
+    g.add(b(0.32, 0.42, 0.05, 0x8c2f3f, -0.28, 0.46));
+    g.add(b(0.24, 0.34, 0.02, WHITE, -0.28, 0.5));
+    g.add(b(0.16, 0.14, 0.16, 0xd8c9a0, 0.28, 0));      // cork
+    g.add(b(0.22, 0.26, 0.22, WHITE, 0.28, 0.14));       // feathers
+    g.add(b(0.3, 0.06, 0.3, WHITE, 0.28, 0.38));
+  },
+  plate(g) {
+    g.add(b(0.8, 0.08, 0.8, WHITE, 0, 0));
+    g.add(b(0.5, 0.09, 0.5, 0xb4472f, 0, 0.08));         // the chicken
+    g.add(b(0.2, 0.06, 0.34, 0xe0b23c, 0.24, 0.08));     // chips
+    g.add(b(0.1, 0.28, 0.1, 0xc23a3a, -0.42, 0.08));     // the bottle
+    g.add(b(0.06, 0.08, 0.06, DARK, -0.42, 0.36));
+  },
+  bed(g) {
+    g.add(b(1.5, 0.26, 1.0, WOOD, 0, 0));                // base
+    g.add(b(1.42, 0.2, 0.94, 0xe8e2ea, 0, 0.26));        // mattress
+    g.add(b(1.42, 0.16, 0.6, 0x6d7fae, 0.02, 0.46));     // duvet
+    g.add(b(0.5, 0.14, 0.34, WHITE, -0.44, 0.46));       // pillows
+    g.add(b(0.5, 0.14, 0.34, WHITE, 0.16, 0.46));
+    g.add(b(1.5, 0.5, 0.12, WOOD, 0, 0.26, -0.56));      // headboard
+    g.add(b(0.16, 0.16, 0.16, PINK, 0.55, 0.62));        // a snack, obviously
+  },
+  weights(g) {
+    g.add(b(1.0, 0.09, 0.09, METAL, 0, 0.2));
+    g.add(b(0.16, 0.42, 0.42, DARK, -0.42, 0.03));
+    g.add(b(0.16, 0.42, 0.42, DARK, 0.42, 0.03));
+  },
   star(g) {
     g.add(b(0.4, 0.4, 0.4, GOLD, 0, 1.1));
     g.add(b(0.62, 0.16, 0.16, GOLD, 0, 1.22));

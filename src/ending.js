@@ -410,3 +410,88 @@ export function makeTownLights(grid, keepAway, sea) {
     },
   };
 }
+
+/**
+ * Shooting stars. One LineSegments draw call for the whole sky: each meteor is
+ * a single segment from a bright head to a dark tail, moving fast and
+ * respawning on a random delay. Additive, so bloom turns them into streaks.
+ *
+ * These only appear once she's found the meteor-shower memory — that's the
+ * moment the world tips into night, and this is what tells her so.
+ */
+export function makeMeteors(count = 6) {
+  const pos = new Float32Array(count * 2 * 3);
+  const col = new Float32Array(count * 2 * 3);
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+
+  const mat = new THREE.LineBasicMaterial({
+    vertexColors: true, transparent: true, opacity: 0,
+    depthWrite: false, blending: THREE.AdditiveBlending, fog: false,
+  });
+
+  const lines = new THREE.LineSegments(geo, mat);
+  lines.frustumCulled = false;
+
+  const meteors = [];
+  for (let i = 0; i < count; i++) {
+    meteors.push({ wait: Math.random() * 9, life: 0, p: new THREE.Vector3(), v: new THREE.Vector3() });
+  }
+
+  function launch(m, around) {
+    const a = Math.random() * Math.PI * 2;
+    const r = 40 + Math.random() * 70;
+    m.p.set(around.x + Math.cos(a) * r, around.y + 55 + Math.random() * 30, around.z + Math.sin(a) * r);
+    // Shallow angle across the sky, always losing height.
+    const dir = Math.random() * Math.PI * 2;
+    m.v.set(Math.cos(dir) * 46, -18 - Math.random() * 12, Math.sin(dir) * 46);
+    m.life = 1.1 + Math.random() * 0.7;
+  }
+
+  return {
+    lines,
+    update(dt, around, active) {
+      // Fade the whole system in and out rather than popping.
+      mat.opacity += ((active ? 1 : 0) - mat.opacity) * Math.min(1, dt * 1.5);
+      if (mat.opacity < 0.01) return;
+
+      for (let i = 0; i < meteors.length; i++) {
+        const m = meteors[i];
+
+        if (m.life <= 0) {
+          m.wait -= dt;
+          if (active && m.wait <= 0) {
+            launch(m, around);
+            m.wait = 2 + Math.random() * 11;
+          }
+          // parked off-screen while waiting
+          for (let k = 0; k < 2; k++) {
+            const o = (i * 2 + k) * 3;
+            pos[o] = pos[o + 1] = pos[o + 2] = 0;
+            col[o] = col[o + 1] = col[o + 2] = 0;
+          }
+          continue;
+        }
+
+        m.life -= dt;
+        m.p.addScaledVector(m.v, dt);
+
+        const fade = Math.max(0, Math.min(1, m.life * 1.6));
+        const head = (i * 2) * 3, tail = (i * 2 + 1) * 3;
+
+        pos[head] = m.p.x; pos[head + 1] = m.p.y; pos[head + 2] = m.p.z;
+        // Tail trails back along the direction of travel.
+        pos[tail] = m.p.x - m.v.x * 0.09;
+        pos[tail + 1] = m.p.y - m.v.y * 0.09;
+        pos[tail + 2] = m.p.z - m.v.z * 0.09;
+
+        col[head] = fade; col[head + 1] = fade * 0.95; col[head + 2] = fade * 0.8;
+        col[tail] = col[tail + 1] = col[tail + 2] = 0;
+      }
+
+      geo.attributes.position.needsUpdate = true;
+      geo.attributes.color.needsUpdate = true;
+    },
+  };
+}

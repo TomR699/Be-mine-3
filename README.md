@@ -3,7 +3,7 @@
 A small voxel game. She plays as herself, walks an island built out of things
 you've done together, and finds you at the end of it.
 
-**Status: P2 complete.** The world, the character, the camera, and the memory
+**Status: P2 complete, real content in.** The world, the character, the camera, and the memory
 loop all work. The content is placeholder — see
 [what's left](#whats-left) below.
 
@@ -97,12 +97,25 @@ dry run — and for the unthinkable case of something going wrong in the moment.
 - **P5** — the dry run: deploy, then play it start to finish on the actual
   laptop, offline, before the day
 
+## The night the sky turns
+
+The nine memories sit along the path in chronological order. One of them —
+the meteor shower — carries `turns: 'night'`. Before she finds it the world
+only ever reaches late afternoon; opening it eases the sky into night over a
+few seconds and starts the shooting stars, which run for the rest of the game.
+
+It's the emotional hinge of the story, so it changes the world rather than
+just adding another note. Move the flag to a different entry and the hinge
+moves with it.
+
 ## The part that needs you
 
-Everything in `src/memories.js` marked `PLACEHOLDER`. Twelve entries, one or
-two sentences each, plus `ENDING_LINES` and `THE_QUESTION` at the bottom of
-that file. Nothing else in the codebase needs to change when you write them —
-add an entry and it appears in the world.
+The nine memories in `src/memories.js` are drafts written from your notes,
+with your own phrases kept deliberately. Read them as her and change anything
+that doesn't sound like you.
+
+`ENDING_LINES` and `THE_QUESTION` at the bottom of that file are also drafts,
+and those are the ones that should really be yours.
 
 Her sprite colours are `HER` at the top of `src/character.js`: `hair` and
 `outfit` are the two that matter.

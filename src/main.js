@@ -5,7 +5,7 @@ import { Character, HER, HIM } from './character.js';
 import { Input, Player, FollowCamera } from './controls.js';
 import { makeProp, makeHalo, makeGlow, makeFlowerField, makeLamp } from './props.js';
 import { GATE_REQUIREMENT } from './memories.js';
-import { Ending, makeGate, makeFireflies, makeTownLights } from './ending.js';
+import { Ending, makeGate, makeFireflies, makeTownLights, makeMeteors } from './ending.js';
 import { EffectComposer } from '../vendor/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from '../vendor/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from '../vendor/addons/postprocessing/UnrealBloomPass.js';
@@ -203,6 +203,16 @@ scene.add(fireflies.points);
 const townLights = makeTownLights(world.grid, world.lookout, SEA);
 scene.add(townLights.points);
 
+const meteors = makeMeteors(7);
+scene.add(meteors.lines);
+
+// The bench at the top. She reads about a bench above a town, then climbs to
+// one — the last memory before the gate is the place the ending happens.
+const lookoutBench = makeProp('bench');
+lookoutBench.position.set(world.lookout.x + 2.4, lookoutTop + 1, world.lookout.z + 1.2);
+lookoutBench.rotation.y = Math.PI * 0.85;
+scene.add(lookoutBench);
+
 // --- input & player -----------------------------------------------------
 const input = new Input(renderer.domElement);
 const player = new Player(world.grid, world.spawn);
@@ -343,6 +353,7 @@ resize();
 
 const clock = new THREE.Clock();
 let paintedDusk = 0;
+let dusk = 0;
 let nearest = null;
 
 function frame() {
@@ -374,8 +385,19 @@ function frame() {
   advanceWind(t);
   advanceWater(t);
 
-  // Dusk deepens as she remembers more.
-  const dusk = found.size / Math.max(1, world.nodes.length);
+  // Dusk deepens as she remembers more — but the meteor-shower memory is the
+  // hinge. Before she finds it the world only reaches late afternoon; finding
+  // it tips the sky into night, and the meteors start.
+  const progress = found.size / Math.max(1, world.nodes.length);
+  const nightTurned = world.nodes.some((n) => n.turns === 'night' && found.has(n.id));
+  const duskTarget = nightTurned
+    ? Math.min(1, 0.66 + progress * 0.34)
+    : progress * 0.5;
+  // Eased, so the change reads as the sky turning rather than a hard cut.
+  dusk += (duskTarget - dusk) * Math.min(1, dt * 0.5);
+
+  meteors.update(dt, player.pos, nightTurned);
+
   if (Math.abs(dusk - paintedDusk) > 0.005) {
     paintedDusk = dusk;
     paintSky(dusk * 0.9);
