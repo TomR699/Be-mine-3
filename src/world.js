@@ -133,10 +133,15 @@ export function generate() {
 
   // Level a pad under each set, blending out at the rim so it isn't a plateau.
   const setMask = new Uint8Array(SX * SZ);
-  const PAD = 7;
+  // Anything within this of a checkpoint is kept clear of trees. The pad's flat
+  // core is smaller than the set, so masking on that alone left trees standing
+  // through the middle of the buildings.
+  const setCells = [];
+  const PAD = 12;   // the sets are up to ~16 across; the pad has to clear them
   for (let i = 0; i < MEMORIES.length; i++) {
     const [ax, az] = anchorCell(i);
     if (ax < 0 || az < 0 || ax >= SX || az >= SZ) continue;
+    setCells.push([ax, az]);
     const target = height[ax + az * SX];
     for (let dz = -PAD; dz <= PAD; dz++) {
       for (let dx = -PAD; dx <= PAD; dx++) {
@@ -145,11 +150,11 @@ export function generate() {
         const dist = Math.hypot(dx, dz);
         if (dist > PAD) continue;
         const k = x + z * SX;
-        if (dist <= PAD - 2.5) {
+        if (dist <= PAD - 3) {
           height[k] = target;
           setMask[k] = 1;
         } else {
-          const blend = (PAD - dist) / 2.5;
+          const blend = (PAD - dist) / 3;
           height[k] = Math.round(height[k] * (1 - blend) + target * blend);
         }
       }
@@ -185,6 +190,7 @@ export function generate() {
       const i = x + z * SX;
       const h = height[i];
       if (h <= SEA + 1 || h > 26 || pathMask[i] || setMask[i]) continue;
+      if (setCells.some(([sx, sz]) => Math.hypot(x - sx, z - sz) < 12)) continue;
       // Keep the camera's first view clear — a tree at spawn fills the screen.
       const nearSpawn = Math.hypot(x - SPAWN.x, z - SPAWN.z) < 9;
       const r = hash2(x, z, 4242);

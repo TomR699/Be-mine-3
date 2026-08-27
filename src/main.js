@@ -508,7 +508,7 @@ function frame() {
 
   // Find the closest unopened memory within reach.
   nearest = null;
-  let best = 4.2;
+  let best = 6.5;
   for (const n of nodeObjects) {
     n.halo.rotation.y += dt * 1.1;
     n.halo.position.y = 1.7 + Math.sin(t * 1.8) * 0.09;
