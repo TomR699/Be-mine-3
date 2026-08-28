@@ -37,6 +37,13 @@ Any static server works. On GitHub Pages it just works, no configuration.
 
 The camera is free — orbit, zoom, the lot.
 
+Whether she's on the ground is a probe of the ground beneath her, not an
+inference from whether the last downward move collided. At 60fps she falls
+about 0.007 of a block per frame — too little to trip the collision epsilon —
+so inferring it flickered `grounded` off every other frame, which froze the
+walk cycle into its airborne pose and jittered her height. It only showed on
+real hardware; a slow test rig falls far enough per frame to land cleanly.
+
 `WALK` in `src/controls.js` is the dial if the pace feels wrong. Her legs are
 0.75 m, and keeping her feet on the ground at a given speed fixes the cadence —
 so a higher walk speed necessarily means a faster stride, no matter how the
@@ -59,6 +66,7 @@ src/
   sky.js            sky shader: gradient, sun, stars
   water.js          sea shader: waves, fresnel, specular, shore foam
   sets.js           the dressed scenery around each checkpoint
+  text3d.js         a 5x7 pixel font, for signage that actually reads
   ending.js         the gate, the cinematic, fireflies, meteors
   memories.js       >>> the content file — this is the one you write <<<
 ```

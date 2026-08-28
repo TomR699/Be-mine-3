@@ -171,6 +171,8 @@ export class Player {
       if (jump && this.grounded) {
         this.vel.y = JUMP;
         this.grounded = false;
+      } else if (this.grounded && this.vel.y < 0) {
+        this.vel.y = 0;          // no creeping downward while stood still
       }
       this.vel.y = Math.max(-40, this.vel.y + GRAVITY * dt);
     }
@@ -178,6 +180,20 @@ export class Player {
     this.moveAxis('x', this.vel.x * dt);
     this.moveAxis('z', this.vel.z * dt);
     this.moveAxis('y', this.vel.y * dt);
+
+    // Whether she's on the ground is a question about the ground, not about
+    // whether the last downward move happened to collide. At 60fps she falls
+    // ~0.007 of a block per frame — too little to trip the collision epsilon —
+    // so inferring it flickered grounded off every other frame, which froze the
+    // walk cycle into the airborne pose and made her height jitter.
+    if (!swimming) {
+      const standing = this.blocked(this.pos.x, this.pos.y - 0.12, this.pos.z);
+      this.grounded = standing && this.vel.y <= 0.001;
+      if (this.grounded) {
+        this.vel.y = 0;
+        this.pos.y = Math.round(this.pos.y);   // settle onto the block surface
+      }
+    }
 
     this.speed = Math.hypot(this.vel.x, this.vel.z);
     this.swimming = swimming;
@@ -203,10 +219,7 @@ export class Player {
     const before = this.pos[axis];
     this.pos[axis] += amount;
 
-    if (!this.blocked(this.pos.x, this.pos.y, this.pos.z)) {
-      if (axis === 'y' && amount < 0) this.grounded = false;
-      return;
-    }
+    if (!this.blocked(this.pos.x, this.pos.y, this.pos.z)) return;
 
     // Auto-step: walking into a single block just steps up onto it.
     if ((axis === 'x' || axis === 'z') && this.grounded) {
@@ -218,14 +231,8 @@ export class Player {
     }
 
     this.pos[axis] = before;
-    if (axis === 'y') {
-      if (amount < 0) this.grounded = true;
-      this.vel.y = 0;
-      // Settle exactly onto the block surface.
-      if (amount < 0) this.pos.y = Math.round(this.pos.y);
-    } else {
-      this.vel[axis] = 0;
-    }
+    if (axis === 'y') this.vel.y = 0;
+    else this.vel[axis] = 0;
   }
 }
 

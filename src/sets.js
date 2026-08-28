@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { makeText } from './text3d.js';
 
 /**
  * Dressed sets — the scenery around each memory.
@@ -99,96 +100,163 @@ const BUILDERS = {
   },
 
   // ---------------------------------------------------------------- 2
-  // Labyrinth, 13-15 Bridge Street. Built from the photo of the front.
+  // Labyrinth, 13-15 Bridge Street — and the street it stands on. A club on
+  // its own in a field reads as a prop; a club in a terrace reads as a place.
   'outside-the-club'(g) {
-    // pavement, kerb, and a strip of road
-    g.add(floor(13, 4.6, 0xa8a49a, 0.02, 0, 1.1));
-    g.add(b(13, 0.16, 0.34, 0x8e8a80, 0, 0, 3.3, { flat: true }));
-    g.add(b(13, 0.06, 1.8, 0x3a3a3e, 0, 0, 4.4, { flat: true }));
-    for (const x of [-4.8, -2.4, 0.0, 2.4, 4.8]) {                   // double yellows
-      g.add(b(1.9, 0.02, 0.1, 0xd9b036, x, 0.07, 4.05, { flat: true }));
-      g.add(b(1.9, 0.02, 0.1, 0xd9b036, x, 0.07, 4.25, { flat: true }));
+    // --- the street surface ---------------------------------------------
+    g.add(floor(52, 7, 0xa8a49a, 0.02, 0, 1.4));                  // pavement
+    g.add(b(52, 0.17, 0.34, 0x8e8a80, 0, 0, 4.5, { flat: true })); // kerb
+    g.add(b(52, 0.06, 6.5, 0x3a3a3e, 0, 0, 7.9, { flat: true }));  // road
+    g.add(b(52, 0.17, 0.34, 0x8e8a80, 0, 0, 11.3, { flat: true }));
+    g.add(floor(52, 3.4, 0xa8a49a, 0.02, 0, 13.1));                // far kerbside
+
+    for (let i = -10; i <= 10; i++) {                                // centre line
+      g.add(b(1.6, 0.02, 0.12, 0xd8d4c8, i * 2.5, 0.07, 7.9, { flat: true }));
+    }
+    for (const x of [-16, -12.8, -9.6, -6.4, -3.2, 0, 3.2, 6.4, 9.6, 12.8, 16]) {  // double yellows
+      g.add(b(2.6, 0.02, 0.1, 0xd9b036, x, 0.07, 5.0, { flat: true }));
+      g.add(b(2.6, 0.02, 0.1, 0xd9b036, x, 0.07, 5.25, { flat: true }));
+    }
+    for (let i = 0; i < 7; i++) {                                   // zebra crossing
+      g.add(b(0.55, 0.02, 6.3, 0xe4e0d4, -11.6 + i * 0.95, 0.08, 7.9, { flat: true }));
     }
 
-    // the building: brick above, dark marble at street level
-    g.add(b(12.6, 3.4, 0.7, LAB.marble, 0, 0, -3.4));
-    g.add(b(12.6, 2.6, 0.7, LAB.brick, 0, 3.4, -3.4));
-    for (const x of [-4.6, -1.4, 1.8, 5.0]) {                        // marble panel joints
-      g.add(b(0.08, 3.3, 0.04, LAB.marbleLt, x, 0, -3.06));
+    // --- the club itself -------------------------------------------------
+    g.add(b(13, 3.4, 0.8, LAB.marble, 0, 0, -3.4));
+    g.add(b(13, 3.0, 0.8, LAB.brick, 0, 3.4, -3.4));
+    g.add(b(13.4, 0.4, 1.0, 0x6f4335, 0, 6.4, -3.4));               // parapet
+    for (const x of [-4.6, -1.4, 1.8, 5.0]) {
+      g.add(b(0.08, 3.3, 0.04, LAB.marbleLt, x, 0, -3.0));
+    }
+    for (const [x, y] of [[-4.4, 4.1], [-1.5, 4.1], [1.5, 4.1], [4.4, 4.1]]) {
+      g.add(b(0.9, 1.3, 0.1, 0x2a2430, x, y, -3.02));               // upstairs windows
+      g.add(b(1.05, 0.12, 0.16, 0xcfc6bb, x, y + 1.3, -3.04));
     }
 
-    // the chequerboard recess floor
-    for (let ix = 0; ix < 10; ix++) {
+    for (let ix = 0; ix < 12; ix++) {                                // chequer recess
       for (let iz = 0; iz < 3; iz++) {
         const c = (ix + iz) % 2 ? LAB.tileA : LAB.tileB;
-        g.add(b(0.8, 0.06, 0.8, c, -3.6 + ix * 0.8, 0.03, -2.6 + iz * 0.8, { flat: true }));
+        g.add(b(0.8, 0.06, 0.8, c, -4.4 + ix * 0.8, 0.03, -2.6 + iz * 0.8, { flat: true }));
       }
     }
 
-    // two pairs of copper-framed doors with the maze logo on the glass
     const doorPair = (cx) => {
       for (const dx of [-0.62, 0.62]) {
         g.add(b(1.18, 2.6, 0.12, LAB.door, cx + dx, 0, -3.02));
         g.add(b(0.86, 2.1, 0.06, LAB.glass, cx + dx, 0.32, -2.96));
-        g.add(b(0.34, 0.42, 0.02, WHITE, cx + dx, 1.5, -2.92));       // the L logo
+        g.add(b(0.34, 0.42, 0.02, WHITE, cx + dx, 1.5, -2.92));
         g.add(b(0.06, 1.1, 0.06, 0xd8b070, cx + dx + (dx > 0 ? -0.5 : 0.5), 0.7, -2.9));
       }
     };
-    doorPair(1.4);
-    doorPair(-2.4);
+    doorPair(1.6);
+    doorPair(-2.6);
 
-    // the big maze panel between the door sets
-    g.add(b(1.5, 1.5, 0.05, WHITE, -0.5, 1.1, -2.98));
+    g.add(b(1.5, 1.5, 0.05, WHITE, -0.5, 1.1, -2.98));              // maze panel
     for (const [w, h, x, y] of [[1.1, 0.09, -0.5, 1.95], [0.09, 0.9, -1.0, 1.35],
                                 [0.8, 0.09, -0.35, 1.5], [0.09, 0.6, -0.1, 1.5]]) {
       g.add(b(w, h, 0.02, LAB.tileB, x, y, -2.94));
     }
-    g.add(b(1.2, 0.14, 0.02, LAB.copper, -0.5, 0.85, -2.94));        // orange wordmark
 
-    // black fascia with LABYRINTH in copper
-    g.add(b(11.5, 1.05, 0.34, LAB.fascia, 0, 2.75, -2.55));
-    const letters = [0.34, 0.3, 0.32, 0.3, 0.28, 0.3, 0.3, 0.28, 0.3];
-    let lx = -1.72;
-    for (const w of letters) {
-      g.add(b(w, 0.4, 0.06, LAB.copper, lx, 3.05, -2.37));
-      lx += w + 0.09;
-    }
+    // the name, spelled out
+    g.add(b(11.6, 1.15, 0.34, LAB.fascia, 0, 2.7, -2.55));
+    const name = makeText('LABYRINTH', { cell: 0.115, depth: 0.08, color: LAB.copper });
+    name.position.set(0, 3.05, -2.36);
+    g.add(name);
+    const sub = makeText('NIGHTCLUB', { cell: 0.045, depth: 0.03, color: 0xd8cdbe });
+    sub.position.set(-0.5, 0.72, -2.93);
+    g.add(sub);
+    const num = makeText('13-15', { cell: 0.04, depth: 0.02, color: WHITE });
+    num.position.set(-4.6, 1.5, -2.95);
+    g.add(num);
 
-    // canopy, its fluorescent tubes, and the festoon bulbs along the front
-    g.add(b(12.4, 0.34, 2.9, 0x1c1a20, 0, 4.3, -2.1));
-    for (const x of [-3.4, 2.4]) {
-      g.add(b(5.2, 0.16, 0.16, LAB.tube, x, 4.12, -1.0, { emissive: 0x5f7488 }));
+    // canopy, tubes, festoon bulbs
+    g.add(b(13.6, 0.34, 2.9, 0x1c1a20, 0, 4.35, -2.1));
+    for (const x of [-3.4, 2.6]) {
+      g.add(b(5.2, 0.16, 0.16, LAB.tube, x, 4.16, -1.0, { emissive: 0x5f7488 }));
     }
-    for (let i = 0; i <= 16; i++) {
-      const t = i / 16;
-      const sag = Math.sin(t * Math.PI) * 0.16;
-      g.add(b(0.16, 0.2, 0.16, LAB.bulb, -6.4 + t * 12.8, 4.66 - sag, -0.72,
+    for (let i = 0; i <= 18; i++) {
+      const t = i / 18, sag = Math.sin(t * Math.PI) * 0.16;
+      g.add(b(0.16, 0.2, 0.16, LAB.bulb, -6.6 + t * 13.2, 4.72 - sag, -0.72,
         { emissive: 0x7a6a3a }));
     }
-
-    // cast iron columns either side of the recess
-    for (const x of [-5.1, 5.1]) {
-      g.add(b(0.42, 4.4, 0.42, LAB.column, x, 0, -0.85));
-      g.add(b(0.56, 0.2, 0.56, LAB.column, x, 4.4, -0.85));
-      g.add(b(0.2, 3.4, 0.2, 0x1a1f1c, x + 0.3, 0, -1.15));           // drainpipe
+    for (const x of [-5.4, 5.4]) {                                   // cast iron columns
+      g.add(b(0.42, 4.45, 0.42, LAB.column, x, 0, -0.85));
+      g.add(b(0.56, 0.2, 0.56, LAB.column, x, 4.45, -0.85));
+      g.add(b(0.2, 3.4, 0.2, 0x1a1f1c, x + 0.3, 0, -1.15));
     }
 
-    // the smoking area: the railed pen off to the side
+    // --- neighbours, so it sits in a terrace ------------------------------
+    // Each is a shopfront under two or three storeys, in its own brick.
+    const SHOP = [
+      { x: -10.4, w: 6.2, h: 7.2, brick: 0x8f5a44, shop: 0x2f4a3c },
+      { x: 10.4, w: 6.2, h: 6.4, brick: 0x7a6152, shop: 0x5a3a44 },
+      { x: -16.4, w: 5.0, h: 5.8, brick: 0x9a6a4e, shop: 0x35435c },
+      { x: 16.4, w: 5.0, h: 6.8, brick: 0x6f5a52, shop: 0x4a3a2c },
+      { x: -22.0, w: 5.4, h: 6.6, brick: 0x74584a, shop: 0x46383f },
+      { x: 22.0, w: 5.4, h: 5.4, brick: 0x8a6250, shop: 0x2f3f4a },
+    ];
+    for (const sh of SHOP) {
+      g.add(b(sh.w, sh.h, 0.9, sh.brick, sh.x, 0, -3.45));
+      g.add(b(sh.w + 0.3, 0.4, 1.1, 0x6f4335, sh.x, sh.h, -3.45));   // parapet
+      g.add(b(sh.w - 0.5, 2.5, 0.14, sh.shop, sh.x, 0, -2.98));      // shopfront
+      g.add(b(sh.w - 1.1, 1.5, 0.06, LAB.glass, sh.x, 0.5, -2.9));
+      g.add(b(sh.w - 0.5, 0.42, 0.2, 0x241f26, sh.x, 2.5, -2.96));   // fascia
+      g.add(b(0.8, 2.1, 0.1, 0x2b2028, sh.x + sh.w / 2 - 0.7, 0, -2.94)); // door
+
+      // windows up the storeys, a few of them lit
+      const floors = Math.floor((sh.h - 3.2) / 1.7);
+      for (let f = 0; f < floors; f++) {
+        for (const dx of [-sh.w / 4, sh.w / 4]) {
+          const lit = ((sh.x + f + dx) | 0) % 3 === 0;
+          g.add(b(0.85, 1.15, 0.1, lit ? 0xffe1a6 : 0x2a2430, sh.x + dx, 3.4 + f * 1.7, -3.0,
+            lit ? { emissive: 0x6b5320 } : {}));
+          g.add(b(1.0, 0.1, 0.16, 0xcfc6bb, sh.x + dx, 4.55 + f * 1.7, -3.02));
+        }
+      }
+    }
+
+    // --- street furniture -------------------------------------------------
+    for (const x of [-19.5, -13.5, -7.5, 7.5, 13.5, 19.5]) {          // streetlights
+      g.add(b(0.22, 4.6, 0.22, 0x3a3f45, x, 0, 3.6));
+      g.add(b(0.22, 0.22, 1.1, 0x3a3f45, x, 4.6, 3.1));
+      g.add(b(0.7, 0.24, 0.5, 0xffe6b0, x, 4.5, 2.7, { emissive: 0x6e5320 }));
+    }
+    g.add(b(2.6, 2.4, 1.3, 0x2f3a44, -8.6, 0, 3.2));                 // bus shelter
+    g.add(b(2.9, 0.14, 1.6, 0x1f272e, -8.6, 2.4, 3.2));
+    g.add(b(2.2, 0.5, 0.1, 0xd8cdbe, -8.6, 0.5, 2.6));
+    g.add(b(0.12, 2.6, 0.12, 0x3a3f45, -6.9, 0, 3.9));
+    g.add(b(0.5, 0.7, 0.06, 0xc23a3a, -6.9, 2.6, 3.9));              // bus stop flag
+
+    for (const [x, c] of [[-4.5, 0x8c3b3b], [3.5, 0x2f4a6b], [11.5, 0xd8d4cc]]) {
+      g.add(b(1.9, 0.7, 0.9, c, x, 0.28, 6.4));                      // parked cars
+      g.add(b(1.2, 0.55, 0.85, c, x - 0.1, 0.98, 6.4));
+      g.add(b(1.0, 0.42, 0.88, 0x2a3038, x - 0.1, 1.02, 6.4));
+      for (const [wx, wz] of [[-0.65, -0.45], [-0.65, 0.45], [0.65, -0.45], [0.65, 0.45]]) {
+        g.add(b(0.3, 0.32, 0.16, 0x1a1a1e, x + wx, 0.12, 6.4 + wz));
+      }
+    }
+    g.add(b(0.46, 0.9, 0.46, 0x3c3a44, 6.2, 0, 3.4));                // bin
+    g.add(b(0.5, 1.1, 0.5, 0x2d4a3a, -1.2, 0, 3.6));                 // postbox-ish
+    g.add(b(0.12, 2.2, 0.12, 0x3a3f45, 5.0, 0, 3.9));                // street sign
+    const st = makeText('BRIDGE ST', { cell: 0.055, depth: 0.02, color: 0x2b2f36 });
+    g.add(b(1.9, 0.4, 0.06, 0xe8e4dc, 5.0, 2.2, 3.9));
+    st.position.set(5.0, 2.34, 3.85);
+    g.add(st);
+
+    // --- the smoking pen, where the conversation actually happened --------
     for (let i = 0; i <= 6; i++) {
-      g.add(b(0.09, 1.0, 0.09, LAB.rail, 5.2 + i * 0.58, 0, 1.9));
+      g.add(b(0.09, 1.0, 0.09, LAB.rail, 5.9 + i * 0.6, 0, 1.9));
     }
-    g.add(b(3.6, 0.08, 0.08, LAB.rail, 6.95, 0.92, 1.9));
-    g.add(b(0.09, 1.0, 0.09, LAB.rail, 8.7, 0, 0.5));
-    g.add(b(0.08, 0.08, 2.9, LAB.rail, 8.7, 0.92, 0.45));
-
-    for (const [x, z] of [[6.1, 0.6], [7.9, 0.9]]) {                  // high tables
+    g.add(b(3.7, 0.08, 0.08, LAB.rail, 7.7, 0.92, 1.9));
+    g.add(b(0.09, 1.0, 0.09, LAB.rail, 9.5, 0, 0.5));
+    g.add(b(0.08, 0.08, 2.9, LAB.rail, 9.5, 0.92, 0.45));
+    for (const [x, z] of [[6.6, 0.6], [8.5, 0.9]]) {
       g.add(b(0.16, 1.05, 0.16, LAB.rail, x, 0, z));
       g.add(b(0.62, 0.07, 0.62, 0x2b2f36, x, 1.05, z));
-      g.add(b(0.18, 0.05, 0.18, 0x6a6a72, x + 0.14, 1.12, z));        // ashtray
+      g.add(b(0.18, 0.05, 0.18, 0x6a6a72, x + 0.14, 1.12, z));
     }
-    g.add(b(0.24, 2.1, 0.24, LAB.rail, 6.9, 0, -0.6));                // patio heater
-    g.add(b(0.68, 0.34, 0.68, 0xffb257, 6.9, 2.1, -0.6, { emissive: 0x7a4a10 }));
-    g.add(b(0.46, 0.8, 0.46, 0x3c3a44, 8.9, 0, 1.2));                 // bin
+    g.add(b(0.24, 2.1, 0.24, LAB.rail, 7.4, 0, -0.6));
+    g.add(b(0.68, 0.34, 0.68, 0xffb257, 7.4, 2.1, -0.6, { emissive: 0x7a4a10 }));
   },
 
   // ---------------------------------------------------------------- 3
@@ -529,7 +597,7 @@ const BUILDERS = {
  * plate ends up under the table and the rackets end up inside the net.
  */
 export const HERO_OFFSET = {
-  'outside-the-club': [6.4, 0, 1.05],  // the lantern belongs in the smoking pen
+  'outside-the-club': [7.0, 0, 1.05],  // the lantern belongs in the smoking pen
   'kitchen-5am': [0.2, 1.04, -1.6],    // the mug goes on the worktop
   tennis: [-2.6, 0, 2.6],              // racket at the side, not through the net
   nandos: [0, 0.86, 0],                // the plate goes on the table
@@ -544,7 +612,7 @@ export const HERO_OFFSET = {
  */
 export const SET_RADIUS = {
   'first-chat': 9,
-  'outside-the-club': 12,
+  'outside-the-club': 20,
   'kitchen-5am': 9,
   tennis: 11,
   'the-gym': 10,
