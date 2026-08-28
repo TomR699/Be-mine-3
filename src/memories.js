@@ -20,7 +20,7 @@
  * Her name, on the title card.
  * >>> REPLACE THIS. It's the first thing she reads.
  */
-export const HER_NAME = 'PLACEHOLDER';
+export const HER_NAME = 'Summer';
 
 /** The line under her name on the title card. Yours to change. */
 export const TITLE_LINE = 'a place made out of us';
@@ -36,7 +36,7 @@ const ALL = [
     prop: 'table',
     title: 'The lunch table',
     when: 'the first proper chat',
-    text: 'You said you played badminton too and my mouth actually dropped. '
+    text: 'Our first proper chat, I dont think either of us will forget how my jaw dropped when you said you played badminton. '
         + 'We spent the rest of lunch talking about the gym. I got nothing '
         + 'done that afternoon.',
   },
@@ -46,17 +46,17 @@ const ALL = [
     title: 'Outside the club',
     when: 'the night you said it first',
     text: 'You pulled me outside to tell me you were really interested in '
-        + 'getting to know me. Straight out, no games. That was the moment I '
-        + 'knew you were the mature kind of girl I look for.',
+        + 'getting to know me. The mature talk that followed made me realise you were the exact kind of',
+        + 'mature sweet girl Id love to date.',
   },
   {
     id: 'kitchen-5am',
     prop: 'cup',
-    title: 'Your kitchen, 5am',
+    title: 'Your kitchen',
     when: 'until the sun came up',
     text: 'We came back from the club and talked in your kitchen until five in '
-        + 'the morning. I skipped home. Actually skipped, in daylight, like an '
-        + 'idiot.',
+        + 'the morning. I was skipped all the way home in broad daylight. I learnt so much about'
+        + 'you that night and I loved it all',
   },
   {
     id: 'tennis',
@@ -73,8 +73,8 @@ const ALL = [
     title: 'Training together',
     when: 'the one we keep going back to',
     text: 'The thing we bonded over before we bonded over anything else. '
-        + 'Counting each other’s reps, arguing about form, both of us far too '
-        + 'competitive about it. It’s ours.',
+        + 'Youre such a good training partner, both pushing eachother harder '
+        + 'and looking SO good in the process.',
   },
   {
     id: 'nandos',
@@ -83,8 +83,8 @@ const ALL = [
     when: 'our first proper day out',
     text: 'We trained, then spent the whole day in town. Nothing special, and '
         + 'the best day I’d had in ages. You kissed me goodbye and I could '
-        + 'not wipe the smile off my face. That was when I thought this could '
-        + 'be something real.',
+        + 'not wipe the smile off my face. That was when I knew this could '
+        + 'be something amazing.',
   },
   {
     id: 'meteors',
@@ -111,17 +111,16 @@ const ALL = [
     title: 'The bench above the town',
     when: 'the magical one',
     text: 'All of Guildford underneath us and neither of us in any hurry to '
-        + 'move. We talked about what we actually wanted. Then we stopped '
-        + 'talking.',
+        + 'move. We talked about what we actually wanted, while i held you in my arms, we want all the same things.',
   },
   {
     id: 'first-nights',
     prop: 'bed',
-    title: 'No plans, no rush',
+    title: 'Cuddles',
     when: 'lately',
-    text: 'Cuddling, talking rubbish, laughing, and working through an '
-        + 'unreasonable quantity of snacks. The first nights I didn’t want '
-        + 'to go home.',
+    text: 'Cuddling, talking rubbish, laughing, and working through and real '
+        + 'obese hours. The best Ive ever slept and the most cared for Ive ever felt '
+        + 'Couldnt bare to watch you leave.',
   },
 ];
 
