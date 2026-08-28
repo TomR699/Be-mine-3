@@ -55,7 +55,7 @@ const ALL = [
     title: 'Your kitchen',
     when: 'until the sun came up',
     text: 'We came back from the club and talked in your kitchen until five in '
-        + 'the morning. I was skipped all the way home in broad daylight. I learnt so much about'
+        + 'the morning. I skipped all the way home in broad daylight. I learnt so much about'
         + 'you that night and I loved it all',
   },
   {
@@ -63,7 +63,7 @@ const ALL = [
     prop: 'racket',
     title: 'Tennis with everyone',
     when: 'the first game',
-    text: 'So much fun and so much banter. I also could not stop thinking '
+    text: 'So much fun and so much banter. I also couldnt stop thinking '
         + 'about how good you looked, which did absolutely nothing for my '
         + 'serve.',
   },
@@ -81,7 +81,7 @@ const ALL = [
     prop: 'plate',
     title: 'Nando’s, and the day after',
     when: 'our first proper day out',
-    text: 'We trained, then spent the whole day in town. Nothing special, and '
+    text: 'We trained, then spent the whole day in town. Nothing special, yet '
         + 'the best day I’d had in ages. You kissed me goodbye and I could '
         + 'not wipe the smile off my face. That was when I knew this could '
         + 'be something amazing.',
@@ -118,9 +118,9 @@ const ALL = [
     prop: 'bed',
     title: 'Cuddles',
     when: 'lately',
-    text: 'Cuddling, talking rubbish, laughing, and working through and real '
-        + 'obese hours. The best Ive ever slept and the most cared for Ive ever felt '
-        + 'Couldnt bare to watch you leave.',
+    text: 'Cuddling, talking rubbish, laughing, and real '
+        + 'obese hours. The best Ive ever slept and the most cared for Ive ever felt. '
+        + ' Couldnt bare to watch you leave, (dont even get me started on the other stuff).',
   },
 ];
 
