@@ -3,7 +3,7 @@
 A small voxel game. She plays as herself, walks an island built out of things
 you've done together, and finds you at the end of it.
 
-**Status: P3 — low-poly, dressed sets, real content in.** The world, the character, the camera, and the memory
+**Status: P3 — low-poly, dressed sets and their surroundings, real content in.** The world, the character, the camera, and the memory
 loop all work. The content is placeholder — see
 [what's left](#whats-left) below.
 
@@ -90,6 +90,18 @@ value noise with an island falloff, flattens a corridor under a path defined by
 fifteen waypoints, then scatters trees, flowers, and lamps around it. Change
 the waypoints and the island reshapes around them.
 
+The island is 224 blocks square. It was 128 until the sets grew: eleven dressed
+sets want about eight thousand blocks of level ground between them, and on the
+old island that was most of the land, so they were being shoved into each other.
+The waypoints, the noise scale and the mesa were all scaled with it, so the
+island looks the same — there is simply more of it. The opening camera angle is
+taken from the direction the path leaves the beach rather than being a fixed
+number, so moving the waypoints doesn't leave her staring out to sea.
+
+The lookout stays bare of trees. The last shot of the game looks out over the
+island from the bench, and a pine on the shoulder of the hill stands right in
+front of it.
+
 **One mesh, not thousands of cubes.** `voxel.js` walks the grid and emits only
 the faces that touch air — the inside of the terrain costs nothing. The whole
 island is two draw calls (solid and water) rather than a quarter of a million
@@ -103,17 +115,34 @@ them cost two draw calls.
 **Checkpoints are sited, not stamped.** For each memory the generator sweeps a
 fan of candidate positions either side of the path and scores them on how flat
 the island already is there, how far they sit from the path, and how far from
-the other checkpoints. Candidates with any path inside their footprint are
-rejected outright unless nothing else qualifies — the path loops back on itself,
-so being clear of the stretch you arrived on is no guarantee. The winner gets a
-terrace cut into the hillside — level across its **whole** declared radius, then
-easing back into the slope beyond it. Levelling only part of the radius is what
-left floor slabs hanging out over the drop.
+the other checkpoints. Candidates with the path running through their footprint
+are rejected outright — the path loops back on itself, so being clear of the
+stretch you arrived on is no guarantee. The winner gets a terrace cut into the
+hillside, level across its **whole** footprint and easing back into the slope
+beyond it.
 
-The carved path is never re-cut: it is the only route to the gate. Where a
-terrace runs into it, the terrace is the one that gives way — the ground eases
-to meet the path over about three blocks, so the join is a ramp rather than a
-step.
+**A set asks for the ground it actually needs.** `setFootprint()` in `sets.js`
+builds the set, measures its bounding box and reports a half-extent. Nothing is
+declared by hand, because a hand-written radius goes stale the moment a set
+grows — every one of these sets outgrew the number written for it, and they
+ended up standing on the slope they were meant to be cut into.
+
+It's a rectangle in the set's own space, not a circle. The club is a street and
+the bedroom is a room; giving both a circle wide enough for the longer side is
+what made them crowd each other off the island. Terraces, spacing and tree
+clearance all work in that space, so each set is cut to the shape it is.
+
+**Where a set meets the path, the terrace matches the path's height.** The path
+can't be re-levelled — it's the only route to the gate — so the alternative is
+easing the terrace down to it, and that ramp runs several blocks inward, under
+the set. Cutting the terrace flush with the path instead means there's nothing
+to ease. Only the verge outside the footprint gives way.
+
+**Sets are placed biggest first**, and the spacing they demand relaxes in stages
+before the search gives up. The sweep only knows about sets already placed, so
+if a small one takes the single wide shelf, the street that needed it has
+nowhere to go. And two verges meeting is a much smaller problem than two
+terraces cut through each other, which leaves a cliff standing in both.
 
 Two more things tie a set to the island rather than leaving it sitting on top
 of one. A **worn spur** is carved from the path to each site, climbing between
@@ -124,8 +153,13 @@ spreading further out — which is what hides the seam where the cut meets the
 hillside.
 
 Each set then faces back toward the path, so it opens to the direction she
-arrives from. `SET_RADIUS` in `sets.js` is how each set tells the generator how
-much flat ground it needs.
+arrives from.
+
+**Sets are written a box at a time and drawn as a handful.** Writing them box
+by box is right; drawing them that way is not — eleven dressed sets came to
+about 1250 meshes, and a draw call each is what a browser spends its frame on.
+Nothing in a set moves, so `mergeFlat()` bakes each one into one merged
+geometry per colour. Same picture, a third of the draw calls.
 
 **Each checkpoint is a dressed set.** `sets.js` builds the scenery around every
 memory — a tennis court with a net and lines, a gym floor with a squat rack, a

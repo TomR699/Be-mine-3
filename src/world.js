@@ -1,8 +1,8 @@
 import { B, Grid } from './voxel.js';
 import { MEMORIES } from './memories.js';
-import { SET_RADIUS } from './sets.js';
+import { setFootprint } from './sets.js';
 
-export const SX = 128, SY = 40, SZ = 128;
+export const SX = 224, SY = 40, SZ = 224;
 export const SEA = 6;
 
 // --- deterministic value noise -----------------------------------------
@@ -29,15 +29,68 @@ function fbm(x, y, seed, octaves = 4) {
   return v / norm;
 }
 
+// --- oriented set footprints --------------------------------------------
+// A set is a rectangle, not a circle: the club is a street and the bedroom is
+// a room. Terraces, spacing and tree clearance all work in the set's own
+// space, so each one is cut to the shape it actually is.
+
+/** World offset (dx, dz) expressed in the set's own axes. */
+function toLocal(site, dx, dz) {
+  const c = Math.cos(site.facing), sn = Math.sin(site.facing);
+  return [dx * c - dz * sn, dx * sn + dz * c];
+}
+
+/** How far outside a site's footprint a world point falls; 0 means inside. */
+function boxDist(site, x, z) {
+  const [lx, lz] = toLocal(site, x - site.x, z - site.z);
+  const qx = Math.max(Math.abs(lx) - site.halfX, 0);
+  const qz = Math.max(Math.abs(lz) - site.halfZ, 0);
+  return Math.hypot(qx, qz);
+}
+
+/**
+ * Clearance between two footprints, by the separating-axis theorem on their
+ * four edge normals. Positive is a real gap; negative means they overlap.
+ *
+ * Two boxes are apart as soon as *one* axis separates them, so this is the
+ * widest gap over the four, not the narrowest. Taking the narrowest reports
+ * every pair as deeply overlapping — including sets at opposite ends of the
+ * island — which silently switches the whole spacing rule off.
+ */
+function boxGap(a, b) {
+  let widest = -Infinity;
+  for (const box of [a, b]) {
+    const c = Math.cos(box.facing), sn = Math.sin(box.facing);
+    for (const [ux, uz] of [[c, -sn], [sn, c]]) {
+      const centre = Math.abs((b.x - a.x) * ux + (b.z - a.z) * uz);
+      widest = Math.max(widest, centre - extentOn(a, ux, uz) - extentOn(b, ux, uz));
+    }
+  }
+  return widest;
+}
+
+/** Half-width of a footprint projected onto a unit world axis. */
+function extentOn(box, ux, uz) {
+  const c = Math.cos(box.facing), sn = Math.sin(box.facing);
+  return box.halfX * Math.abs(c * ux - sn * uz) +
+         box.halfZ * Math.abs(sn * ux + c * uz);
+}
+
+/** Distance from a site's centre out to its footprint edge along an angle. */
+function edgeRadius(site, ang) {
+  const [ux, uz] = toLocal(site, Math.cos(ang), Math.sin(ang));
+  return 1 / Math.max(Math.abs(ux) / site.halfX, Math.abs(uz) / site.halfZ);
+}
+
 // --- the path she walks -------------------------------------------------
 // Waypoints trace a loop through the zones and end at the lookout hill.
 const WAYPOINTS = [
-  [22, 96], [30, 78], [46, 74], [58, 84], [72, 80],
-  [84, 66], [76, 52], [60, 46], [46, 50], [38, 38],
-  [52, 28], [68, 24], [82, 30], [94, 40], [100, 54],
+  [39, 168], [53, 137], [81, 130], [102, 147], [126, 140],
+  [147, 116], [133, 91], [105, 81], [81, 88], [67, 67],
+  [91, 49], [119, 42], [144, 53], [165, 70], [175, 95],
 ];
-export const SPAWN = { x: 22, z: 96 };
-export const LOOKOUT = { x: 100, z: 54 };
+export const SPAWN = { x: 39, z: 168 };
+export const LOOKOUT = { x: 175, z: 95 };
 
 function pathPoints() {
   const pts = [];
@@ -62,8 +115,8 @@ export function generate() {
   const height = new Int16Array(SX * SZ);
   for (let z = 0; z < SZ; z++) {
     for (let x = 0; x < SX; x++) {
-      const n = fbm(x / 42, z / 42, 1337, 4);
-      const ridge = fbm(x / 15, z / 15, 99, 3) * 0.25;
+      const n = fbm(x / 74, z / 74, 1337, 4);
+      const ridge = fbm(x / 26, z / 26, 99, 3) * 0.25;
       const d = Math.hypot(x - cx, z - cz) / (SX * 0.46);
       const falloff = Math.max(0, 1 - Math.pow(d, 3.2));
       let h = Math.round((n * 0.75 + ridge) * 22 * falloff + 3);
@@ -72,7 +125,7 @@ export function generate() {
       // blocks per step, which auto-step can't climb — so the carved path is
       // the only way up, which is what gives the gate something to guard.
       const dl = Math.hypot(x - LOOKOUT.x, z - LOOKOUT.z);
-      if (dl < 17) h += Math.round(14 * Math.max(0, Math.min(1, (17 - dl) / 3.5)));
+      if (dl < 29) h += Math.round(14 * Math.max(0, Math.min(1, (29 - dl) / 6)));
 
       height[x + z * SX] = Math.max(1, Math.min(SY - 8, h));
     }
@@ -119,7 +172,7 @@ export function generate() {
   // relative to it and the terrain is cut for them before columns are filled.
   let gateIndex = path.length - 1;
   for (let i = 0; i < path.length; i++) {
-    if (Math.hypot(path[i][0] - LOOKOUT.x, path[i][1] - LOOKOUT.z) < 17.5) {
+    if (Math.hypot(path[i][0] - LOOKOUT.x, path[i][1] - LOOKOUT.z) < 30) {
       gateIndex = i;
       break;
     }
@@ -151,118 +204,208 @@ export function generate() {
    * sea. The facing is then simply "back toward the path", so every set opens
    * to the direction she arrives from.
    */
-  const sites = [];
-  for (let i = 0; i < MEMORIES.length; i++) {
-    const pi = anchorIndex(i);
-    const [px, pz] = path[pi];
-    const [ax, az] = path[Math.min(path.length - 1, pi + 5)];
-    const tx = ax - px, tz = az - pz;
-    const tl = Math.hypot(tx, tz) || 1;
-    const perpX = -tz / tl, perpZ = tx / tl;      // across the path
+  const sites = new Array(MEMORIES.length);
+  const placed = [];
 
-    const radius = SET_RADIUS[MEMORIES[i].id] ?? 9;
+  // Biggest first. The sweep only knows about sets already placed, so if a
+  // small one takes the one wide shelf on that side of the path, the street
+  // that needed it has nowhere left to go.
+  const order = MEMORIES.map((m, i) => i).sort((a, b) => {
+    const fa = setFootprint(MEMORIES[a].id), fb = setFootprint(MEMORIES[b].id);
+    return fb.halfX * fb.halfZ - fa.halfX * fa.halfZ;
+  });
+
+  for (const i of order) {
+    // The footprint comes from the set's own geometry. A street wants a long
+    // terrace and a bedroom a small one; giving both a circle big enough for
+    // the longer side is what made the sets crowd each other off the island.
+    const fp = setFootprint(MEMORIES[i].id);
+    const radius = Math.max(fp.halfX, fp.halfZ);   // coarse bound, for reach
     let best = null;
-    const clear = [];       // candidates with no path inside the footprint
-    const compromised = []; // everything else, in case nothing is clear
 
-    // Sweep a fan either side of the path rather than just straight out from
-    // it. Where the path loops back on itself the two perpendiculars can both
-    // be blocked, and a wider search finds the shoulder that isn't.
-    for (const side of [1, -1]) {
-      for (let sweep = -50; sweep <= 50; sweep += 12.5) {
-        const a = (sweep * Math.PI) / 180;
-        const dirX = perpX * side * Math.cos(a) + (tx / tl) * Math.sin(a);
-        const dirZ = perpZ * side * Math.cos(a) + (tz / tl) * Math.sin(a);
+    /**
+     * Candidates around one point on the path, sweeping a fan either side of
+     * it rather than straight out. Where the path loops back on itself both
+     * perpendiculars can be blocked, and a wider search finds the shoulder
+     * that isn't.
+     */
+    const sweepFrom = (pi, range, margin, clear, compromised) => {
+      const [px, pz] = path[pi];
+      const [ax, az] = path[Math.min(path.length - 1, pi + 5)];
+      const tx = ax - px, tz = az - pz;
+      const tl = Math.hypot(tx, tz) || 1;
+      const perpX = -tz / tl, perpZ = tx / tl;      // across the path
 
-        for (let d = radius * 0.95; d <= radius * 1.45; d += 1.2) {
-          const cx = Math.round(px + dirX * d);
-          const cz = Math.round(pz + dirZ * d);
-          if (cx - radius < 1 || cz - radius < 1) continue;
-          if (cx + radius >= SX - 1 || cz + radius >= SZ - 1) continue;
+      for (const side of [1, -1]) {
+        for (let sweep = -50; sweep <= 50; sweep += 12.5) {
+          const a = (sweep * Math.PI) / 180;
+          const dirX = perpX * side * Math.cos(a) + (tx / tl) * Math.sin(a);
+          const dirZ = perpZ * side * Math.cos(a) + (tz / tl) * Math.sin(a);
 
-          const h = height[cx + cz * SX];
-          if (h <= SEA + 1) continue;               // not in the water
-          if (h > 24) continue;                     // not up the mesa
+          for (let d = radius * 0.95; d <= radius * range; d += 1.2) {
+            const cx = Math.round(px + dirX * d);
+            const cz = Math.round(pz + dirZ * d);
+            if (cx - radius < 1 || cz - radius < 1) continue;
+            if (cx + radius >= SX - 1 || cz + radius >= SZ - 1) continue;
 
-          const rp = Math.round(radius);   // the whole footprint must be clear
-          let onPath = 0;
-          for (let dz = -rp; dz <= rp; dz += 2) {
-            for (let dx = -rp; dx <= rp; dx += 2) {
-              if (Math.hypot(dx, dz) > rp) continue;
-              const qx = cx + dx, qz = cz + dz;
-              if (qx < 0 || qz < 0 || qx >= SX || qz >= SZ) continue;
-              if (pathMask[qx + qz * SX]) onPath++;
+            const h = height[cx + cz * SX];
+            if (h <= SEA + 1) continue;               // not in the water
+            if (h > 24) continue;                     // not up the mesa
+
+            // The path may not run through the footprint — she'd be walking
+            // through the middle of the set. Running close alongside it is
+            // only a preference: a set right on the verge is cramped, but it
+            // beats one shoved somewhere the island has no room for at all.
+            const facing = Math.atan2(px - cx, pz - cz);
+            const cf = Math.cos(facing), sf = Math.sin(facing);
+            const VERGE = 5;
+            let onPath = 0, alongPath = 0;
+            for (let lz = -fp.halfZ - VERGE; lz <= fp.halfZ + VERGE; lz += 2) {
+              for (let lx = -fp.halfX - VERGE; lx <= fp.halfX + VERGE; lx += 2) {
+                const qx = Math.round(cx + lx * cf + lz * sf);
+                const qz = Math.round(cz - lx * sf + lz * cf);
+                if (qx < 0 || qz < 0 || qx >= SX || qz >= SZ) continue;
+                if (!pathMask[qx + qz * SX]) continue;
+                if (Math.abs(lx) <= fp.halfX && Math.abs(lz) <= fp.halfZ) onPath++;
+                else alongPath++;
+              }
             }
-          }
 
-          let score = -roughness(cx, cz, Math.round(radius * 0.6)) * 3;
-          score -= Math.abs(d - radius * 1.15) * 0.6;   // sit about a radius out
-          score -= Math.abs(sweep) * 0.02;              // prefer square to the path
-          for (const other of sites) {
-            const gap = Math.hypot(cx - other.x, cz - other.z);
-            const want = radius + other.radius + 6;
-            if (gap < want) score -= (want - gap) * 8;
-          }
+            const cand = {
+              x: cx, z: cz, facing, halfX: fp.halfX, halfZ: fp.halfZ, radius, pi,
+            };
 
-          // Two sets close enough to overlap read as one confused place, so
-          // separation is a requirement rather than a preference.
-          const crowded = sites.some((o) =>
-            Math.hypot(cx - o.x, cz - o.z) < radius + o.radius + 5);
+            let score = -roughness(cx, cz, Math.round(radius * 0.6)) * 3;
+            score -= Math.abs(d - radius * 1.15) * 1.4;   // sit about a radius out
+            score -= Math.abs(sweep) * 0.02;              // prefer square to the path
+            // Two sets close enough to overlap read as one confused place —
+            // and worse, the second terrace cuts a cliff through the first —
+            // so separation is a requirement rather than a preference. The
+            // test is between the real oriented footprints, not bounding
+            // circles: two long sets end to end are fine, side by side aren't.
+            let crowded = false, squeeze = 0;
+            for (const other of placed) {
+              const slack = boxGap(cand, other);
+              if (slack < 8) squeeze += (8 - slack) * 8;
+              if (slack < margin) crowded = true;
+            }
+            score -= squeeze + alongPath * 2.5;
 
-          const cand = { x: cx, z: cz, radius, score };
-          if (onPath === 0 && !crowded) clear.push(cand);
-          else {
-            cand.score -= onPath * 10 + (crowded ? 60 : 0);
-            compromised.push(cand);
+            cand.score = score;
+            if (onPath === 0 && !crowded) clear.push(cand);
+            else {
+              cand.score -= onPath * 10 + (crowded ? 60 : 0);
+              compromised.push(cand);
+            }
           }
         }
       }
+    };
+
+    // Passes, widening only as far as they have to. A set that finds room
+    // beside its own stretch of path should stay there; when it can't, it
+    // slides *along* the path before it wanders away from it, because the
+    // island has far more room lengthways than it does out to the sides. The
+    // last resort is walking further from the path. Each pass stops the
+    // moment it turns up clear ground.
+    const base = anchorIndex(i);
+    const slide = (n) => Math.max(2, Math.min(path.length - 2, base + n));
+    // `margin` is the breathing space demanded between this set and its
+    // neighbours. It relaxes to nothing before the search gives up, because
+    // two verges meeting is a far smaller problem than two terraces cut
+    // through each other — which leaves a cliff standing in both sets.
+    const PASSES = [
+      { offsets: [0], range: 1.8, margin: 6 },
+      { offsets: [0, 10, -10, 20, -20], range: 1.9, margin: 6 },
+      { offsets: [0, 14, -14, 28, -28, 42, -42], range: 2.4, margin: 4 },
+      { offsets: [0, 12, -12, 24, -24, 36, -36, 48, -48], range: 3.0, margin: 1 },
+    ];
+
+    let fallbackAnchor = base;
+    for (const pass of PASSES) {
+      const clear = [];       // candidates with no path inside the footprint
+      const compromised = []; // everything else, in case nothing is clear
+      for (const off of pass.offsets) {
+        sweepFrom(slide(off), pass.range, pass.margin, clear, compromised);
+      }
+
+      const pool = clear.length ? clear : compromised;
+      for (const c of pool) if (!best || c.score > best.score) best = c;
+      if (clear.length) break;
+      best = null;            // a compromised winner only stands if nothing better turns up
+      if (pool.length) fallbackAnchor = pool.reduce((a, b) => (b.score > a.score ? b : a)).pi;
+      if (pass === PASSES[PASSES.length - 1]) {
+        for (const c of compromised) if (!best || c.score > best.score) best = c;
+      }
     }
 
-    const pool = clear.length ? clear : compromised;
-    for (const c of pool) if (!best || c.score > best.score) best = c;
-
-    // If nowhere scored (edge of the map, all sea), fall back to the old
-    // fixed offset rather than dropping a memory entirely.
+    // If nowhere scored at all (edge of the map, all sea), fall back to the
+    // old fixed offset rather than dropping a memory entirely.
+    const anchor = path[best ? best.pi : fallbackAnchor];
     if (!best) {
-      best = { x: Math.round(px) - 3, z: Math.round(pz) - 3, radius, score: 0 };
+      const bx = Math.round(anchor[0]) - 3, bz = Math.round(anchor[1]) - 3;
+      best = {
+        x: bx, z: bz, radius, halfX: fp.halfX, halfZ: fp.halfZ, score: 0,
+        facing: Math.atan2(anchor[0] - bx, anchor[1] - bz), pi: fallbackAnchor,
+      };
     }
-    best.facing = Math.atan2(px - best.x, pz - best.z);
-    sites.push(best);
+    best.anchor = best.pi;
+    sites[i] = best;
+    placed.push(best);
   }
 
-  // Cut a terrace for each. The rim is eased rather than linear and its radius
-  // wobbles with angle, so it reads as a natural shoulder in the hillside
-  // instead of a circular plateau stamped on top of one.
+  // Cut a terrace for each — the shape of the set, not a circle around it, so
+  // the whole footprint is level and nothing hangs over a drop. Beyond the
+  // footprint the ground eases back into the hillside over a shoulder whose
+  // width wobbles with the angle, so it reads as a natural bench in the slope
+  // rather than a plateau stamped on top of one.
+  //
+  // setMask holds site index + 1, not a flag: terraces are cut one after
+  // another, and without knowing who owns a cell a later site's eased rim
+  // erodes an earlier site's level ground — which is a slope under a floor.
   const setMask = new Uint8Array(SX * SZ);
   const RIM = 6;              // how far the terrace eases back into the slope
-  for (const site of sites) {
-    const target = height[site.x + site.z * SX];
-    const R = site.radius;
-    const reach = Math.ceil(R * 1.24 + RIM);
+  for (let si = 0; si < sites.length; si++) {
+    const site = sites[si];
+    const own = si + 1;
+    const reach = Math.ceil(Math.hypot(site.halfX, site.halfZ) + RIM + 2);
+
+    // Where the path runs alongside a set, cut the terrace to the *path's*
+    // height rather than the hillside's. The path can't be re-levelled — it's
+    // the only route to the gate — so the alternative is a ramp easing down
+    // to it, and that ramp runs several blocks inward, under the set. Sitting
+    // flush with the path means there is nothing to ease.
+    let target = height[site.x + site.z * SX];
+    let nearestPath = Infinity;
+    for (let dz = -reach; dz <= reach; dz++) {
+      for (let dx = -reach; dx <= reach; dx++) {
+        const x = site.x + dx, z = site.z + dz;
+        if (x < 0 || z < 0 || x >= SX || z >= SZ) continue;
+        if (!pathMask[x + z * SX]) continue;
+        const d = boxDist(site, x, z);
+        if (d < nearestPath) { nearestPath = d; target = height[x + z * SX]; }
+      }
+    }
+    if (nearestPath > RIM) target = height[site.x + site.z * SX];
     for (let dz = -reach; dz <= reach; dz++) {
       for (let dx = -reach; dx <= reach; dx++) {
         const x = site.x + dx, z = site.z + dz;
         if (x < 0 || z < 0 || x >= SX || z >= SZ) continue;
 
-        const dist = Math.hypot(dx, dz);
-        if (dist < 0.001) { height[x + z * SX] = target; continue; }
-
-        // The whole declared radius is levelled, then the ground eases back
-        // into the hillside beyond it. Flattening only part of the radius is
-        // what left the floor slabs hanging out over the drop.
+        const outside = boxDist(site, x, z);
         const ang = Math.atan2(dz, dx);
-        const wobble = 1.0 + 0.24 * noise2(Math.cos(ang) * 1.7 + 8,
-                                           Math.sin(ang) * 1.7 + 8, 606);
-        const flat = R * wobble;
-        if (dist > flat + RIM) continue;
+        const rim = RIM * (0.72 + 0.56 * noise2(Math.cos(ang) * 1.7 + 8,
+                                                Math.sin(ang) * 1.7 + 8, 606));
+        if (outside > rim) continue;
 
-        const w = dist <= flat ? 1 : smooth(1 - (dist - flat) / RIM);
+        const w = outside <= 0 ? 1 : smooth(1 - outside / rim);
         const k = x + z * SX;
         // Leave the path exactly as carved — it is the only way to the gate.
         if (pathMask[k]) continue;
+        // A rim never eats into another set's level ground.
+        if (setMask[k] && setMask[k] !== own && w < 1) continue;
         height[k] = Math.round(height[k] * (1 - w) + target * w);
-        if (dist <= flat) setMask[k] = 1;
+        if (outside <= 0 && !setMask[k]) setMask[k] = own;
       }
     }
   }
@@ -272,7 +415,7 @@ export function generate() {
   const spurMask = new Uint8Array(SX * SZ);
   for (let i = 0; i < sites.length; i++) {
     const site = sites[i];
-    const pi = anchorIndex(i);
+    const pi = site.anchor ?? anchorIndex(i);
     const [px, pz] = path[pi];
     const fromH = Math.round(pathH[pi]);
     const toH = height[site.x + site.z * SX];
@@ -288,11 +431,11 @@ export function generate() {
       // Easing all the way to the centre instead drags the ramp across the
       // flat ground the set is standing on.
       const ds = Math.hypot(cx - site.x, cz - site.z);
+      const lip = ds - boxDist(site, cx, cz);   // where the terrace edge is
       let h;
-      if (ds <= site.radius) h = toH;
+      if (ds <= lip) h = toH;
       else {
-        const u = Math.max(0, Math.min(1,
-          (outer - ds) / Math.max(1, outer - site.radius)));
+        const u = Math.max(0, Math.min(1, (outer - ds) / Math.max(1, outer - lip)));
         h = Math.round(fromH + (toH - fromH) * smooth(u));
       }
       for (let dz = -2; dz <= 2; dz++) {
@@ -303,6 +446,8 @@ export function generate() {
           if (d > 2) continue;
           const k = x + z * SX;
           if (pathMask[k]) continue;
+          // Nor does one set's approach track gouge a channel across another's.
+          if (setMask[k] && setMask[k] !== i + 1) continue;
           if (d <= 1.3) { height[k] = h; spurMask[k] = 1; }
           else height[k] = Math.round(height[k] * 0.45 + h * 0.55);
         }
@@ -317,6 +462,8 @@ export function generate() {
     for (let x = 1; x < SX - 1; x++) {
       const k = x + z * SX;
       if (!setMask[k] || pathMask[k]) continue;
+      // Only the verge gives way, never the ground the set stands on.
+      if (boxDist(sites[setMask[k] - 1], x, z) <= 0) continue;
 
       let nearest = -1, nearestH = 0;
       for (let dz = -3; dz <= 3; dz++) {
@@ -364,12 +511,17 @@ export function generate() {
       const i = x + z * SX;
       const h = height[i];
       if (h <= SEA + 1 || h > 26 || pathMask[i] || setMask[i] || spurMask[i]) continue;
-      if (sites.some((st) => Math.hypot(x - st.x, z - st.z) < st.radius + 1)) continue;
+      if (sites.some((st) => boxDist(st, x, z) < 2)) continue;
       // Keep the camera's first view clear — a tree at spawn fills the screen.
       const nearSpawn = Math.hypot(x - SPAWN.x, z - SPAWN.z) < 9;
+      // And keep the mesa bare. The last shot of the game looks out over the
+      // island from the bench, and a pine on the shoulder of the hill stands
+      // right in front of it. The bald top is also what makes the lookout read
+      // as a lookout from down on the path.
+      if (Math.hypot(x - LOOKOUT.x, z - LOOKOUT.z) < 34) continue;
       const r = hash2(x, z, 4242);
-      const density = fbm(x / 28, z / 28, 777, 2);
-      if (r > 0.9755 - density * 0.02) {
+      const density = fbm(x / 49, z / 49, 777, 2);
+      if (r > 0.9715 - density * 0.018) {
         if (nearSpawn || nearPath(pathMask, x, z, 4)) continue;
         const seed = hash2(x, z, 99);
         tree(grid, x, h + 1, z, seed);
@@ -386,16 +538,18 @@ export function generate() {
   const decor = [];
   for (let i = 0; i < sites.length; i++) {
     const site = sites[i];
-    const R = site.radius;
-    const count = Math.round(R * 7);
+    // Scale the dressing to the perimeter, so a long set gets a long verge.
+    const count = Math.round((site.halfX + site.halfZ) * 7);
     for (let n = 0; n < count; n++) {
       const r1 = hash2(i * 977 + n, n * 31 + 7, 5150);
       const r2 = hash2(n * 53 + 3, i * 611 + n, 8801);
       const r3 = hash2(i + n * 17, n * 7 + i * 3, 2027);
 
       const ang = r1 * Math.PI * 2;
-      // an annulus hugging the lip, mostly just outside the level ground
-      const dist = R * (0.86 + r2 * 0.55);
+      // a band hugging the lip, mostly just outside the level ground — which
+      // follows the shape of the terrace rather than a circle around it
+      const R = edgeRadius(site, ang);
+      const dist = R * (0.94 + r2 * 0.5);
       const x = Math.round(site.x + Math.cos(ang) * dist);
       const z = Math.round(site.z + Math.sin(ang) * dist);
       if (x < 1 || z < 1 || x >= SX - 1 || z >= SZ - 1) continue;
@@ -406,7 +560,7 @@ export function generate() {
       if (h <= SEA + 1) continue;
 
       // rocks cluster on the cut edge, greenery spreads further out
-      const onLip = dist < R * 1.06;
+      const onLip = dist < R * 1.12;
       const kind = r3 < (onLip ? 0.42 : 0.12) ? 'rock' : (r3 < 0.62 ? 'bush' : 'tuft');
       decor.push({
         x: x + 0.5, y: h + 1, z: z + 0.5, kind,
@@ -452,7 +606,19 @@ export function generate() {
     return { ...m, x: x + 0.5, y, z: z + 0.5, facing, found: false };
   });
 
-  return { grid, height, pathMask, spurMask, lamps, nodes, flowers, trees, decor, gate, spawn: SPAWN, lookout: LOOKOUT };
+  // Which way the path leaves the beach. The opening shot is framed from this
+  // rather than from a fixed angle — move the waypoints and the camera still
+  // starts behind her looking inland, instead of out to sea.
+  const heading = (() => {
+    const [x0, z0] = path[0], [x1, z1] = path[Math.min(10, path.length - 1)];
+    const l = Math.hypot(x1 - x0, z1 - z0) || 1;
+    return { x: (x1 - x0) / l, z: (z1 - z0) / l };
+  })();
+
+  return {
+    grid, height, pathMask, spurMask, lamps, nodes, flowers, trees, decor, gate,
+    spawn: SPAWN, lookout: LOOKOUT, heading,
+  };
 }
 
 function nearPath(mask, x, z, r) {

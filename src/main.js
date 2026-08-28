@@ -63,7 +63,7 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.12;
 
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(58, 1, 0.1, 500);
+const camera = new THREE.PerspectiveCamera(58, 1, 0.1, 700);
 
 // Sky: a shader dome carrying a gradient, the sun, and a field of stars that
 // comes out as the world turns to night. It follows the camera every frame.
@@ -73,7 +73,7 @@ const horizon = sky.horizon;
 
 // Far enough that the whole island is visible from the lookout — the view
 // down over the valley is the point of standing up there.
-scene.fog = new THREE.Fog(new THREE.Color(0xdcecf4), 115, 340);
+scene.fog = new THREE.Fog(new THREE.Color(0xdcecf4), 130, 400);
 
 const hemi = new THREE.HemisphereLight(0xbfd9ef, 0x6a7560, 1.15);
 scene.add(hemi);
@@ -279,7 +279,11 @@ scene.add(meteors.lines);
 
 // --- input & player -----------------------------------------------------
 const input = new Input(renderer.domElement);
+// Start the camera behind her, looking the way the path goes. The camera sits
+// at focus + (sin yaw, _, cos yaw), so behind her is the negated heading.
+input.orbit.yaw = Math.atan2(-world.heading.x, -world.heading.z);
 const player = new Player(world.grid, world.spawn);
+player.yaw = Math.atan2(world.heading.x, world.heading.z);   // facing inland
 player.spawnX = world.spawn.x + 0.5;
 player.spawnZ = world.spawn.z + 0.5;
 const follow = new FollowCamera(camera, world.grid, LOWPOLY ? groundAt : null);

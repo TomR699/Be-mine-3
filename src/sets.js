@@ -62,6 +62,49 @@ const LAB = {
   rail: 0x2a2e33,
 };
 
+
+// --- shared pieces for the surroundings ----------------------------------
+
+/** A building shell with a parapet and lit-at-random upstairs windows. */
+function building(g, { x, z, w, d, h, brick, rot = 0, ground = null, lit = 3 }) {
+  g.add(b(w, h, d, brick, x, 0, z, { rot }));
+  g.add(b(w + 0.3, 0.4, d + 0.3, 0x6f4335, x, h, z, { rot }));
+  const front = z + d / 2 + 0.02;
+  if (ground) g.add(b(w - 0.8, 2.4, 0.12, ground, x, 0, front, { rot }));
+  const floors = Math.max(0, Math.floor((h - 3.2) / 1.7));
+  for (let f = 0; f < floors; f++) {
+    for (const dx of [-w / 4, w / 4]) {
+      const on = (((x + dx) * 3 + f * 7) | 0) % lit === 0;
+      g.add(b(0.85, 1.15, 0.1, on ? 0xffe1a6 : 0x2a2430, x + dx, 3.4 + f * 1.7, front,
+        on ? { emissive: 0x6b5320, rot } : { rot }));
+      g.add(b(1.0, 0.1, 0.16, 0xcfc6bb, x + dx, 4.55 + f * 1.7, front, { rot }));
+    }
+  }
+}
+
+/** A run of posts and rails between two points. */
+function fenceRun(g, x0, z0, x1, z1, { h = 1.6, color = 0x5b6169, step = 2.2 } = {}) {
+  const len = Math.hypot(x1 - x0, z1 - z0);
+  const n = Math.max(1, Math.round(len / step));
+  for (let i = 0; i <= n; i++) {
+    const t = i / n;
+    g.add(b(0.1, h, 0.1, color, x0 + (x1 - x0) * t, 0, z0 + (z1 - z0) * t));
+  }
+  const mx = (x0 + x1) / 2, mz = (z0 + z1) / 2;
+  const ang = Math.atan2(x1 - x0, z1 - z0);
+  for (const y of [h * 0.55, h - 0.08]) {
+    g.add(b(0.06, 0.06, len, color, mx, y, mz, { rot: ang }));
+  }
+}
+
+/** Two walls and a floor — a room with its fourth wall taken away. */
+function roomShell(g, { w, d, h = 3.0, wall = 0xd6cec2, floorCol = 0x8a6a45, x = 0, z = 0 }) {
+  g.add(floor(w, d, floorCol, 0.03, x, z));
+  g.add(b(w, h, 0.3, wall, x, 0, z - d / 2));                 // back wall
+  g.add(b(0.3, h, d, wall, x - w / 2, 0, z));                 // side wall
+  g.add(b(w + 0.4, 0.28, d + 0.4, 0x6f5a4c, x, h, z));        // roof lip
+}
+
 const BUILDERS = {
   // ---------------------------------------------------------------- 1
   // The work canteen. The shuttlecock on the table is the whole memory.
@@ -592,6 +635,250 @@ const BUILDERS = {
   },
 };
 
+
+/**
+ * The world around each set.
+ *
+ * The sets themselves say what the memory was; this says where on the island it
+ * is. Kept separate from BUILDERS so the working sets stay untouched — and so a
+ * memory with no entry here simply gets no surroundings rather than breaking.
+ */
+const CONTEXT = {
+  // The office it was a canteen for, and the yard outside it.
+  'first-chat'(g) {
+    building(g, { x: -1, z: -8.6, w: 16, d: 4.5, h: 8.5, brick: 0x7f8a92, ground: 0x35485c });
+    for (const dx of [-5.5, -1.5, 2.5, 6.5]) {                  // glazed ground floor
+      g.add(b(3.0, 2.6, 0.12, 0x35485c, dx - 1, 0.2, -6.28));
+      g.add(b(2.4, 2.0, 0.06, 0x9fc4d8, dx - 1, 0.45, -6.2));
+    }
+    g.add(b(2.4, 0.3, 1.6, 0x9aa2a8, -1, 2.9, -5.6));           // entrance canopy
+    const nm = makeText('OFFICE', { cell: 0.075, depth: 0.03, color: 0xdde4e8 });
+    nm.position.set(-1, 3.5, -6.3); g.add(nm);
+
+    g.add(floor(20, 5, 0x9a9689, 0.02, -1, -4.2));               // forecourt
+    for (const x of [7.5, 9.0, 10.5]) {                          // bike racks
+      g.add(b(0.1, 0.9, 0.1, 0x6e747a, x, 0, -3.2));
+      g.add(b(0.1, 0.9, 0.1, 0x6e747a, x, 0, -2.2));
+      g.add(b(0.08, 0.08, 1.1, 0x6e747a, x, 0.85, -2.7));
+    }
+    for (const x of [-8, 5]) {                                    // planters
+      g.add(b(2.6, 0.7, 1.0, 0x8c7f70, x, 0, -1.6));
+      g.add(b(2.3, 0.6, 0.8, GREEN, x, 0.7, -1.6));
+    }
+    fenceRun(g, -10.5, 3.4, 9.5, 3.4, { h: 1.1, color: 0x6e747a });
+  },
+
+  // Her house, with the kitchen wall taken off.
+  'kitchen-5am'(g) {
+    roomShell(g, { w: 9.5, d: 7.5, h: 3.1, wall: 0xd9d0c2, floorCol: 0x8a6a45, x: -0.6, z: -0.8 });
+    g.add(b(1.1, 2.2, 0.16, 0x6b4a34, 3.6, 0, -4.5));            // a door through
+    g.add(b(0.12, 0.12, 0.12, GOLD, 3.2, 1.1, -4.38));
+    building(g, { x: -0.6, z: -6.2, w: 10, d: 2.4, h: 6.4, brick: 0xb4a08c });
+    g.add(b(10.6, 0.4, 3.4, 0x8c5a48, -0.6, 6.4, -5.8));         // roof over
+
+    g.add(floor(12, 5, 0x6d8a52, 0.02, -0.6, 5.4));              // back garden
+    fenceRun(g, -6.6, 7.6, 5.4, 7.6, { h: 1.5, color: 0x7a5638, step: 1.6 });
+    fenceRun(g, -6.6, 2.9, -6.6, 7.6, { h: 1.5, color: 0x7a5638, step: 1.6 });
+    fenceRun(g, 5.4, 2.9, 5.4, 7.6, { h: 1.5, color: 0x7a5638, step: 1.6 });
+    for (const [x, z] of [[-4.5, 6.2], [3.4, 6.6]]) {
+      g.add(b(0.7, 0.6, 0.7, 0xa9614a, x, 0, z));                // pots
+      g.add(b(0.55, 0.7, 0.55, GREEN, x, 0.6, z));
+    }
+    g.add(b(0.7, 1.0, 0.6, 0x39424c, 4.4, 0, 3.6));              // wheelie bin
+    g.add(b(1.9, 0.1, 0.5, WOOD, -3.2, 0.45, 4.6));              // garden bench
+    for (const x of [-4.0, -2.4]) g.add(b(0.12, 0.45, 0.4, DARK, x, 0, 4.6));
+  },
+
+  // A small sports ground: pavilion, fencing, floodlights, a second court.
+  tennis(g) {
+    fenceRun(g, -7.5, -6.5, 7.5, -6.5, { h: 3.0, color: 0x4b5157, step: 2.5 });
+    fenceRun(g, -7.5, 6.5, 7.5, 6.5, { h: 3.0, color: 0x4b5157, step: 2.5 });
+    fenceRun(g, -7.5, -6.5, -7.5, 6.5, { h: 3.0, color: 0x4b5157, step: 2.5 });
+    fenceRun(g, 7.5, -6.5, 7.5, 6.5, { h: 3.0, color: 0x4b5157, step: 2.5 });
+
+    // pavilion
+    g.add(b(7.5, 3.0, 4.2, 0xcfc3ae, -0.5, 0, 10.2));
+    g.add(b(8.2, 0.5, 5.0, 0x7a4a3c, -0.5, 3.0, 10.2));
+    g.add(b(7.6, 0.3, 1.8, 0x7a4a3c, -0.5, 2.6, 7.9));           // veranda roof
+    for (const x of [-3.6, 2.6]) g.add(b(0.16, 2.6, 0.16, 0xcfc3ae, x, 0, 8.2));
+    for (const dx of [-2.4, 0.6]) {
+      g.add(b(1.5, 1.2, 0.12, 0x9fc4d8, dx, 1.2, 8.12));
+      g.add(b(1.6, 0.12, 0.18, WHITE, dx, 2.4, 8.1));
+    }
+    g.add(b(1.0, 2.2, 0.14, 0x4a3628, 2.6, 0, 8.12));
+    const nm = makeText('TENNIS CLUB', { cell: 0.06, depth: 0.03, color: 0x3c4a3f });
+    nm.position.set(-0.5, 3.15, 8.05); g.add(nm);
+
+    // a second court, marked but empty
+    g.add(floor(11, 8, CLAY, 0.02, -13.5, 1.0));
+    for (const z of [-2.6, 4.6]) g.add(b(10.4, 0.03, 0.09, WHITE, -13.5, 0.03, z, { flat: true }));
+    for (const x of [-18.6, -8.4]) g.add(b(0.09, 0.03, 7.4, WHITE, x, 0.03, 1.0, { flat: true }));
+    g.add(b(0.12, 1.1, 0.12, DARK, -13.5, 0, -2.8));
+    g.add(b(0.12, 1.1, 0.12, DARK, -13.5, 0, 4.8));
+    g.add(b(0.05, 0.85, 7.6, 0x2c2c33, -13.5, 0.12, 1.0));
+
+    for (const [x, z] of [[-9.5, -7.5], [9.5, -7.5], [-9.5, 7.5], [9.5, 7.5]]) {
+      g.add(b(0.3, 7.0, 0.3, 0x5b6169, x, 0, z));                // floodlights
+      g.add(b(1.5, 0.5, 0.4, 0xf2efe4, x, 7.0, z, { emissive: 0x54503f }));
+    }
+  },
+
+  // An industrial unit on a small parade, with its car park.
+  'the-gym'(g) {
+    g.add(b(13, 5.2, 9.5, 0xb9bcc0, 0, 0, -1.2));                // the shed
+    g.add(b(13.6, 0.5, 10.1, 0x6f747a, 0, 5.2, -1.2));
+    g.add(b(13, 0.35, 0.35, 0x8c9096, 0, 3.0, 3.6));             // cladding line
+    g.add(b(4.6, 3.4, 0.2, 0x4a4f55, -3.2, 0, 3.62));            // roller door
+    for (let i = 0; i < 7; i++) g.add(b(4.4, 0.12, 0.06, 0x5f656b, -3.2, 0.4 + i * 0.45, 3.7));
+    g.add(b(1.2, 2.3, 0.16, 0x2b3138, 2.4, 0, 3.62));            // personnel door
+    for (const dx of [1.0, 3.0, 5.0]) {
+      g.add(b(1.4, 1.0, 0.1, 0x35485c, dx, 3.2, 3.62));
+      g.add(b(1.2, 0.8, 0.06, 0x9fc4d8, dx, 3.3, 3.56));
+    }
+    g.add(b(6.0, 1.0, 0.24, 0x1f242a, 0, 4.0, 3.7));             // signage band
+    const nm = makeText('IRONWORKS GYM', { cell: 0.062, depth: 0.04, color: 0xd6dc8e, emissive: 0x3a3d1c });
+    nm.position.set(0, 4.35, 3.86); g.add(nm);
+
+    g.add(floor(17, 8, 0x4a4d52, 0.02, 0, 8.6));                 // car park
+    for (let i = 0; i < 6; i++) {
+      g.add(b(0.1, 0.02, 4.6, 0xd8d4c8, -6.5 + i * 2.6, 0.06, 8.4, { flat: true }));
+    }
+    for (const [x, c] of [[-5.2, 0x8c3b3b], [0.2, 0x2f4a6b]]) {
+      g.add(b(1.9, 0.7, 0.9, c, x, 0.28, 8.2, { rot: Math.PI / 2 }));
+      g.add(b(1.2, 0.55, 0.85, c, x, 0.98, 8.3, { rot: Math.PI / 2 }));
+    }
+    fenceRun(g, -8.6, 12.8, 8.6, 12.8, { h: 1.8, color: 0x5b6169 });
+    for (const x of [-7.5, 7.5]) {
+      g.add(b(0.22, 5.0, 0.22, 0x3a3f45, x, 0, 9.5));
+      g.add(b(0.7, 0.24, 0.5, 0xffe6b0, x, 4.9, 9.1, { emissive: 0x6e5320 }));
+    }
+  },
+
+  // A stretch of high street.
+  nandos(g) {
+    building(g, { x: 0, z: -6.0, w: 9.5, d: 4.0, h: 7.0, brick: 0x9c4a52, ground: 0x5a1f24 });
+    g.add(b(8.6, 1.1, 0.3, 0x38151a, 0, 3.0, -3.85));            // fascia
+    const nm = makeText("NANDO'S", { cell: 0.1, depth: 0.05, color: 0xe8c98a });
+    nm.position.set(0, 3.3, -3.66); g.add(nm);
+    g.add(b(9.0, 0.35, 1.7, 0x38151a, 0, 4.2, -3.2));            // awning
+    for (const dx of [-2.6, 2.6]) {
+      g.add(b(2.2, 2.2, 0.12, 0x8a6a3a, dx, 0.3, -3.9));
+      g.add(b(1.8, 1.8, 0.06, 0xc9a86a, dx, 0.5, -3.82));
+    }
+
+    building(g, { x: -10.5, z: -6.2, w: 8, d: 4.0, h: 6.0, brick: 0x7d6154, ground: 0x35485c });
+    building(g, { x: 10.5, z: -6.2, w: 8, d: 4.0, h: 6.6, brick: 0x8f7a5f, ground: 0x46383f });
+
+    g.add(floor(30, 4.5, 0x9a9689, 0.02, 0, -0.8));              // pavement
+    g.add(b(30, 0.17, 0.34, 0x8e8a80, 0, 0, 1.5, { flat: true }));
+    g.add(b(30, 0.06, 5.5, 0x3a3a3e, 0, 0, 4.4, { flat: true })); // road
+    for (let i = -6; i <= 6; i++) {
+      g.add(b(1.4, 0.02, 0.12, 0xd8d4c8, i * 2.3, 0.07, 4.4, { flat: true }));
+    }
+    for (const x of [-9, -3, 3, 9]) {
+      g.add(b(0.2, 4.2, 0.2, 0x3a3f45, x, 0, 0.6));              // streetlights
+      g.add(b(0.6, 0.22, 0.45, 0xffe6b0, x, 4.1, 0.2, { emissive: 0x6e5320 }));
+    }
+    g.add(b(0.46, 0.9, 0.46, 0x3c3a44, 5.8, 0, 0.2));
+  },
+
+  // A hilltop field, and nothing else. The sky is the set.
+  meteors(g) {
+    for (let i = 0; i < 26; i++) {                                // drystone wall
+      const t = i / 25, x = -11 + t * 22, z = -7.5 + Math.sin(t * 3.2) * 0.8;
+      g.add(b(0.9, 0.75, 0.7, 0x9a978d, x, 0, z));
+      if (i % 2) g.add(b(0.7, 0.3, 0.6, 0x8a877d, x, 0.75, z));
+    }
+    g.add(b(0.16, 1.3, 0.16, WOOD, -1.4, 0, -7.4));               // a field gate
+    g.add(b(0.16, 1.3, 0.16, WOOD, 1.4, 0, -7.4));
+    for (const y of [0.45, 0.95]) g.add(b(2.9, 0.12, 0.08, WOOD, 0, y, -7.4));
+    for (const [x, z] of [[-8.5, 5.5], [7.5, 4.5], [-6, -3.5]]) {
+      g.add(b(1.1, 0.6, 0.9, 0x8d8a97, x, 0, z));                 // boulders
+    }
+  },
+
+  // A beachside court with a hut and floodlights.
+  badminton(g) {
+    fenceRun(g, -6.5, -4.8, 6.5, -4.8, { h: 2.6, color: 0x5b6169, step: 2.4 });
+    fenceRun(g, -6.5, 4.8, 6.5, 4.8, { h: 2.6, color: 0x5b6169, step: 2.4 });
+    fenceRun(g, -6.5, -4.8, -6.5, 4.8, { h: 2.6, color: 0x5b6169, step: 2.4 });
+
+    g.add(b(4.6, 2.6, 3.2, 0xd8c9a8, 8.6, 0, 1.0));               // changing hut
+    g.add(b(5.2, 0.4, 3.8, 0x7a4a3c, 8.6, 2.6, 1.0));
+    g.add(b(1.0, 2.1, 0.14, 0x4a3628, 7.4, 0, -0.65));
+    g.add(b(1.4, 1.0, 0.12, 0x9fc4d8, 9.8, 1.2, -0.65));
+    const nm = makeText('COURTS', { cell: 0.055, depth: 0.03, color: 0x3c4a3f });
+    nm.position.set(8.6, 2.75, -0.7); g.add(nm);
+
+    for (const [x, z] of [[-7.5, -5.8], [7.5, -5.8]]) {
+      g.add(b(0.28, 6.0, 0.28, 0x5b6169, x, 0, z));
+      g.add(b(1.3, 0.45, 0.4, 0xf2efe4, x, 6.0, z, { emissive: 0x54503f }));
+    }
+    for (const x of [-3, 1]) {                                     // beach huts behind
+      g.add(b(2.2, 2.4, 2.0, x < 0 ? 0x8fb8c4 : 0xd8a9a0, x, 0, -8.4));
+      g.add(b(2.5, 0.35, 2.3, WHITE, x, 2.4, -8.4));
+    }
+  },
+
+  // The overlook: steps, a wall, a viewpoint.
+  'the-bench'(g) {
+    for (let i = 0; i < 5; i++) {                                  // steps up to it
+      g.add(b(4.0, 0.22, 0.7, PAVING, 0, -1.1 + i * 0.22, -3.4 - i * 0.7, { flat: true }));
+    }
+    for (let i = 0; i < 22; i++) {                                 // low stone wall
+      const t = i / 21, x = -5.5 + t * 11;
+      g.add(b(0.55, 0.8, 0.7, 0x9a978d, x, 0, 2.75));
+      g.add(b(0.6, 0.18, 0.8, 0x8a877d, x, 0.8, 2.75));
+    }
+    g.add(b(0.22, 1.3, 0.22, 0x3a3f45, 3.4, 0, 1.9));              // telescope
+    g.add(b(0.6, 0.22, 0.22, 0x2b2f36, 3.4, 1.35, 1.75));
+    g.add(b(1.3, 0.7, 0.1, 0x6b5a3a, -3.6, 1.0, 2.4, { rot: -0.3 })); // viewpoint plaque
+    for (const [x, z] of [[-6.6, 0.5], [6.6, -0.5]]) {
+      g.add(b(0.9, 0.7, 0.9, 0x8c5343, x, 0, z));
+      g.add(b(0.75, 0.9, 0.75, GREEN, x, 0.7, z));
+    }
+  },
+
+  // Her room, with the wall taken off, inside the rest of the house.
+  'first-nights'(g) {
+    roomShell(g, { w: 9.0, d: 7.5, h: 3.0, wall: 0xc9b8bf, floorCol: 0x7d4a55, x: 0, z: -0.6 });
+    g.add(b(1.8, 1.5, 0.14, 0x2b3138, 2.6, 1.1, -4.25));           // window
+    g.add(b(2.0, 0.14, 0.2, WHITE, 2.6, 2.6, -4.28));
+    for (const dx of [-0.75, 0.75]) {                              // curtains
+      g.add(b(0.5, 1.9, 0.1, 0x8a5a66, 2.6 + dx, 0.9, -4.16));
+    }
+    g.add(b(1.0, 2.2, 0.16, 0x6b4a34, -3.4, 0, -4.25));            // door
+    g.add(b(0.12, 0.12, 0.12, GOLD, -2.95, 1.1, -4.12));
+    g.add(b(1.6, 2.3, 0.7, 0x6b4a34, -3.6, 0, 1.2));               // wardrobe
+    g.add(b(0.08, 0.5, 0.08, GOLD, -3.1, 1.3, 1.56));
+
+    g.add(b(10.6, 3.4, 2.6, 0xb4a08c, 0, 3.0, -5.6));              // rest of the house
+    g.add(b(11.2, 0.45, 3.4, 0x8c5a48, 0, 6.4, -5.4));
+    g.add(floor(13, 4.5, 0x6d8a52, 0.02, 0, 6.4));                 // garden beyond
+    fenceRun(g, -6.5, 8.4, 6.5, 8.4, { h: 1.5, color: 0x7a5638, step: 1.6 });
+  },
+
+  // Somewhere quiet, at night. Deliberately unspecific — you know where it was.
+  'i-love-you'(g) {
+    g.add(floor(7, 6, PAVING, 0.02, 0, 0));
+    for (let ix = 0; ix < 5; ix++) {
+      g.add(b(0.05, 0.03, 5.9, 0x8b8880, -2.8 + ix * 1.4, 0.04, 0, { flat: true }));
+    }
+    g.add(b(0.2, 3.4, 0.2, 0x3a3f45, 2.4, 0, -1.4));               // a streetlight
+    g.add(b(0.62, 0.26, 0.48, 0xffe6b0, 2.4, 3.3, -1.75, { emissive: 0x6e5320 }));
+    g.add(b(1.9, 0.1, 0.45, WOOD, -1.6, 0.45, 1.4));               // a bench
+    g.add(b(1.9, 0.55, 0.1, WOOD, -1.6, 0.55, 1.18));
+    for (const x of [-2.4, -0.8]) g.add(b(0.12, 0.45, 0.4, DARK, x, 0, 1.4));
+    for (let i = 0; i < 14; i++) {                                 // a low hedge behind
+      g.add(b(0.9, 1.0, 0.9, 0x3f6f45, -5.6 + i * 0.86, 0, -3.2));
+    }
+    for (const [x, z] of [[-4.4, 2.2], [4.2, 1.6]]) {
+      g.add(b(0.7, 0.6, 0.7, 0xa9614a, x, 0, z));
+      g.add(b(0.55, 0.8, 0.55, GREEN, x, 0.6, z));
+    }
+  },
+};
+
 /**
  * Where the hero prop sits inside its set, in set-local space. Without this the
  * plate ends up under the table and the rackets end up inside the net.
@@ -606,28 +893,136 @@ export const HERO_OFFSET = {
 };
 
 /**
- * Roughly how much flat ground each set needs, in blocks. The terrain
- * generator uses this to cut a terrace of the right size — a set that
- * overhangs its terrace ends up half-buried at one end.
+ * How much flat ground each set needs — measured from the geometry, not
+ * declared by hand. Hand-written radii go stale the moment a set grows: every
+ * context added here pushed its set out past the terrace cut for it, and the
+ * sets ended up standing on the slope they were supposed to be cut into.
+ *
+ * The footprint is a half-extent in the set's own space, so a street gets a
+ * long terrace and a bedroom gets a small one instead of both getting a circle
+ * big enough for the longer side.
+ *
+ * Padding: a couple of blocks of level ground beyond the geometry, so a set
+ * ends at a verge rather than at a drop.
  */
-export const SET_RADIUS = {
-  'first-chat': 9,
-  'outside-the-club': 20,
-  'kitchen-5am': 9,
-  tennis: 11,
-  'the-gym': 10,
-  nandos: 10,
-  meteors: 7,
-  badminton: 10,
-  'the-bench': 9,
-  'first-nights': 9,
-};
+const PAD = 2.5;
+const _footprints = new Map();
+
+export function setFootprint(id) {
+  if (_footprints.has(id)) return _footprints.get(id);
+  const g = makeSet(id);
+  let fp = { halfX: 6, halfZ: 6 };
+  if (g) {
+    const box = new THREE.Box3().setFromObject(g);
+    if (isFinite(box.min.x)) {
+      fp = {
+        halfX: Math.max(Math.abs(box.min.x), Math.abs(box.max.x)) + PAD,
+        halfZ: Math.max(Math.abs(box.min.z), Math.abs(box.max.z)) + PAD,
+      };
+    }
+    disposeDeep(g);
+  }
+  _footprints.set(id, fp);
+  return fp;
+}
+
+function disposeDeep(obj) {
+  obj.traverse((o) => {
+    if (o.geometry) o.geometry.dispose();
+  });
+}
+
+// --- merging -------------------------------------------------------------
+
+/**
+ * Collapse a finished set into one mesh per colour.
+ *
+ * The sets are built a box at a time, which is the right way to write them and
+ * the wrong way to draw them: eleven dressed sets came to about 1250 separate
+ * meshes, and a draw call each is what a browser spends its frame on. Nothing
+ * in a set moves or changes colour, so they can all be baked into a handful of
+ * merged geometries. Boxes are bucketed by colour, emissive and whether they
+ * cast a shadow, so the result looks identical.
+ */
+function mergeFlat(root) {
+  root.updateMatrixWorld(true);
+
+  const buckets = new Map();
+  const keep = [];
+  root.traverse((o) => {
+    if (!o.isMesh) return;
+    const g = o.geometry, m = o.material;
+    // Anything unusual — no index, several materials, a texture — is left as
+    // it is rather than quietly mangled.
+    if (!g.index || Array.isArray(m) || !m.color || m.map || m.transparent) {
+      keep.push(o);
+      return;
+    }
+    const key = `${m.color.getHex()}|${m.emissive ? m.emissive.getHex() : 0}` +
+                `|${o.castShadow ? 1 : 0}|${o.receiveShadow ? 1 : 0}`;
+    let bucket = buckets.get(key);
+    if (!bucket) {
+      bucket = { proto: o, parts: [] };
+      buckets.set(key, bucket);
+    }
+    bucket.parts.push(o);
+  });
+  if (buckets.size === 0) return root;
+
+  const out = new THREE.Group();
+  for (const o of keep) out.add(o);
+
+  const normal = new THREE.Matrix3();
+  const v = new THREE.Vector3();
+  for (const { proto, parts } of buckets.values()) {
+    let nVerts = 0, nIndex = 0;
+    for (const o of parts) {
+      nVerts += o.geometry.attributes.position.count;
+      nIndex += o.geometry.index.count;
+    }
+    const pos = new Float32Array(nVerts * 3);
+    const nor = new Float32Array(nVerts * 3);
+    const idx = new Uint32Array(nIndex);
+    let vo = 0, io = 0;
+
+    for (const o of parts) {
+      const g = o.geometry;
+      const P = g.attributes.position, N = g.attributes.normal;
+      normal.getNormalMatrix(o.matrixWorld);
+      for (let i = 0; i < P.count; i++) {
+        v.fromBufferAttribute(P, i).applyMatrix4(o.matrixWorld);
+        pos[(vo + i) * 3] = v.x; pos[(vo + i) * 3 + 1] = v.y; pos[(vo + i) * 3 + 2] = v.z;
+        v.fromBufferAttribute(N, i).applyMatrix3(normal).normalize();
+        nor[(vo + i) * 3] = v.x; nor[(vo + i) * 3 + 1] = v.y; nor[(vo + i) * 3 + 2] = v.z;
+      }
+      const I = g.index;
+      for (let i = 0; i < I.count; i++) idx[io + i] = I.getX(i) + vo;
+      vo += P.count;
+      io += I.count;
+      g.dispose();
+    }
+
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
+    geo.setIndex(new THREE.BufferAttribute(idx, 1));
+    geo.computeBoundingSphere();
+
+    const mesh = new THREE.Mesh(geo, proto.material);
+    mesh.castShadow = proto.castShadow;
+    mesh.receiveShadow = proto.receiveShadow;
+    out.add(mesh);
+  }
+  return out;
+}
 
 /** Build the set for a memory id, or null if it has no dressing. */
 export function makeSet(id) {
   const build = BUILDERS[id];
-  if (!build) return null;
+  const around = CONTEXT[id];
+  if (!build && !around) return null;
   const g = new THREE.Group();
-  build(g);
-  return g;
+  if (around) around(g);     // the world it stands in, drawn first
+  if (build) build(g);       // then the set itself
+  return mergeFlat(g);
 }
