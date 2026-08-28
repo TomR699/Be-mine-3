@@ -59,6 +59,14 @@ your graphics driver when the fix was a hard refresh.
 | `Ctrl`+`Shift`+`E` | rehearsal shortcut: find everything and jump to the ending |
 | `Ctrl`+`Shift`+`X` | wipe progress and reload, for a clean hand-over |
 
+`Ctrl`+`Shift`+`X` is handled in `index.html`, not in `main.js`. It used to live
+in `main.js` with the other keys, which meant that the one time you actually
+needed it — the game failing to start — there was no key handler on the page at
+all and it did nothing. The failure screen also carries a button that does the
+same thing, for anyone whose browser has that chord bound to an extension, and a
+build stamp so you can tell whether the browser is running the file you think it
+is.
+
 The camera is free — orbit, zoom, the lot.
 
 Whether she's on the ground is a probe of the ground beneath her, not an

@@ -466,7 +466,9 @@ addEventListener('keydown', (e) => {
   if (e.code === 'KeyM' && !e.ctrlKey && !e.metaKey) { sound.toggleMute(); return; }
 
   // Rehearsal reset: wipe progress and reload, so you can play it through and
-  // still hand her a clean save.
+  // still hand her a clean save. index.html carries its own copy of this, so
+  // it still works when this file is the thing that's broken — which is when
+  // you actually need it.
   if (e.code === 'KeyX' && e.ctrlKey && e.shiftKey) {
     try { localStorage.removeItem(SAVE_KEY); } catch { /* nothing to clear */ }
     location.reload();

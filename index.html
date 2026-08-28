@@ -364,6 +364,17 @@
   }
   #nowebgl-detail:empty { display: none; }
 
+  #nowebgl .recover { margin-top: 1.5rem; font-size: 0.8rem; opacity: 0.75; }
+  #nowebgl button {
+    font: inherit; font-size: 0.85rem; cursor: pointer;
+    color: inherit; background: rgba(255,255,255,0.09);
+    border: 1px solid rgba(255,255,255,0.22); border-radius: 5px;
+    padding: 0.5rem 1rem;
+  }
+  #nowebgl button:hover { background: rgba(255,255,255,0.16); }
+  #build { display: block; margin-top: 0.9rem; opacity: 0.55;
+           font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+
   #nowebgl {
     position: fixed;
     inset: 0;
@@ -438,14 +449,52 @@
 <div id="loading">Building the world…</div>
 
 <div id="nowebgl">
-  <p id="nowebgl-msg">This one needs WebGL, and this browser isn't giving us any.<br>
-  Try Chrome, Firefox, or Safari — or a different machine.</p>
-  <pre id="nowebgl-detail"></pre>
+  <div>
+    <p id="nowebgl-msg">This one needs WebGL, and this browser isn't giving us any.<br>
+    Try Chrome, Firefox, or Safari — or a different machine.</p>
+    <pre id="nowebgl-detail"></pre>
+    <p class="recover">
+      <button id="wipe" type="button">Clear saved progress and reload</button>
+      <span id="build"></span>
+    </p>
+  </div>
 </div>
 
 <script type="importmap">
 { "imports": { "three": "./vendor/three.module.min.js" } }
 </script>
+<script>
+  // Recovery has to live outside the module graph.
+  //
+  // Ctrl+Shift+X wipes the save — but it was registered inside main.js, which
+  // is exactly the file that fails when there's something to recover from. On
+  // the failure screen there was no key handler at all, so the one instruction
+  // for getting unstuck did nothing. This copy runs whatever happens, and the
+  // button beside the error does the same thing for anyone whose browser has
+  // that chord bound to an extension.
+  //
+  // The key is repeated here rather than imported, deliberately: the point is
+  // that this works when the imports don't.
+  var BE_MINE_SAVE = 'be-mine-3.save.v1';
+  var BE_MINE_BUILD = '2026-08-28c';
+
+  function beMineWipe() {
+    try { localStorage.removeItem(BE_MINE_SAVE); } catch (e) { /* nothing to clear */ }
+    location.reload();
+  }
+  addEventListener('keydown', function (e) {
+    if (e.code === 'KeyX' && e.ctrlKey && e.shiftKey) { e.preventDefault(); beMineWipe(); }
+  });
+  document.addEventListener('DOMContentLoaded', function () {
+    document.getElementById('wipe').addEventListener('click', beMineWipe);
+    // So we can tell at a glance whether the browser is running the build we
+    // think it is, rather than one it kept.
+    document.getElementById('build').textContent =
+      'build ' + BE_MINE_BUILD + ' · saved progress: ' +
+      (localStorage.getItem(BE_MINE_SAVE) ? 'yes' : 'none');
+  });
+</script>
+
 <script type="module">
   // Two different failures used to land on the same screen: a machine with no
   // WebGL, and any error at all while the game was starting up. The second one
