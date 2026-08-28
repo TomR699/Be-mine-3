@@ -108,6 +108,32 @@ void main() {
  * Build the sea. `height` is the terrain heightmap, used to bake how deep the
  * water is at every vertex so the shader knows where the shore is.
  */
+/**
+ * The horizon. A flat sheet under the detailed water, wide enough that its own
+ * edge is far outside the fog.
+ *
+ * The shaded sea has to stay at a size where its waves are still waves — a few
+ * units per quad — which means it has an edge, and from anywhere high on the
+ * island you could see the ocean simply stop and the sky begin. This fills in
+ * behind it. It is a single quad with no waves and no fresnel: by the distance
+ * it takes over it is fog anyway, and its only job is to make sure there is
+ * water all the way to the horizon.
+ */
+export function makeOcean(sx, sz) {
+  const geo = new THREE.PlaneGeometry(sx * 26, sz * 26);
+  geo.rotateX(-Math.PI / 2);
+  geo.translate(sx / 2, SURFACE - 0.12, sz / 2);
+
+  const mat = new THREE.MeshBasicMaterial({ color: 0x1d4f70, fog: true });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.renderOrder = -1;
+  mesh.frustumCulled = false;
+  return {
+    mesh,
+    update(dusk) { mat.color.setHex(0x1d4f70).multiplyScalar(1 - dusk * 0.72); },
+  };
+}
+
 export function makeWater(sx, sz, height, segments = 200) {
   // The sea runs well past the island. It used to stop exactly at the island's
   // bounds, so from anywhere high the water simply ended and the sky started —

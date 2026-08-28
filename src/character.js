@@ -142,25 +142,43 @@ export class Character {
     }
 
     if (palette.longHair) {
-      // Falls past the shoulders, entirely behind the hood — it used to run
-      // straight through it. Hung off the head so it swings when she turns.
-      const nape = box(0.5, 0.34, 0.13, palette.hair);
-      nape.position.set(0, headH * 0.3, -0.29);
-      this.head.add(nape);
-
-      const back = box(0.54, 0.72, 0.18, palette.hair);
-      const backZ = (palette.hood ? HOOD_BACK - 0.09 : -0.28);
-      back.position.set(0, headH * 0.5 - 0.44, backZ);
-      this.head.add(back);
-
-      const under = box(0.46, 0.42, 0.1, palette.hairShade);
-      under.position.set(0, headH * 0.5 - 0.78, backZ + 0.02);
+      // The fall, built as a stack rather than one slab.
+      //
+      // A single box behind the head had to clear the hood, which meant it
+      // stood a third of a block off her back with a gap behind her neck —
+      // a plank following her about. This hugs the skull at the top, steps
+      // out over the hood where real hair would lie on it, and tapers to a
+      // point past her shoulders. Each segment overlaps the one above so
+      // there is no seam, and none of them touch the hood.
+      //
+      //          w     h     d     y      z
+      const fall = [
+        [0.52, 0.26, 0.17, 0.42, -0.28],   // crown and nape, against the head
+        [0.54, 0.31, 0.18, 0.155, -0.34],  // down the back of the neck
+        [0.54, 0.30, 0.18, -0.16, -0.47],  // out over the hood
+        [0.46, 0.26, 0.16, -0.42, -0.47],  // past the shoulders
+        [0.34, 0.18, 0.13, -0.62, -0.45],  // and tapering off
+      ];
+      for (const [w, h, d, y, z] of fall) {
+        const seg = box(w, h, d, palette.hair);
+        seg.position.set(0, y, z);
+        this.head.add(seg);
+      }
+      // a darker under-layer at the ends, so it isn't one flat colour
+      const under = box(0.38, 0.3, 0.11, palette.hairShade);
+      under.position.set(0, -0.52, -0.42);
       this.head.add(under);
 
-      // a strand over each shoulder, clear of the chest so it doesn't sink in
-      const strand = box(0.12, 0.5, 0.12, palette.hair);
-      strand.position.set(-0.2, headH * 0.5 - 0.4, 0.29);
-      this.head.add(strand);
+      // Locks framing the face, hanging in front of her shoulders. Thin, and
+      // set out far enough that they never sink into her chest.
+      for (const sx of [-1, 1]) {
+        const lock = box(0.11, 0.46, 0.13, palette.hair);
+        lock.position.set(sx * 0.22, headH * 0.5 - 0.36, 0.14);
+        this.head.add(lock);
+        const tip = box(0.09, 0.16, 0.11, palette.hairShade);
+        tip.position.set(sx * 0.22, headH * 0.5 - 0.66, 0.14);
+        this.head.add(tip);
+      }
     } else if (!palette.curtains) {
       const back = box(0.54, 0.44, 0.14, palette.hair);
       back.position.set(0, headH * 0.5, -0.24);

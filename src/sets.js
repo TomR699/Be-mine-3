@@ -98,6 +98,41 @@ function fenceRun(g, x0, z0, x1, z1, { h = 1.6, color = 0x5b6169, step = 2.2 } =
 }
 
 /** Two walls and a floor — a room with its fourth wall taken away. */
+/**
+ * The roundel over the office door — a white and blue quartered disc in a dark
+ * ring, which is what you look up at every morning on the way in.
+ *
+ * Built from boxes on the front of the wall rather than a texture, like every
+ * other sign here. The quarters are two pale and two blue, laid out so the
+ * pale ones are opposite each other.
+ */
+function roundel(g, x, y, z, size = 1.4) {
+  const RING = 0x1c1f24, PALE = 0xf2f4f6, BLUE = 0x2f6fb5;
+  const r = size / 2;
+
+  // the dark ring, as a band of blocks around the circle
+  const N = 16;
+  for (let i = 0; i < N; i++) {
+    const a = (i / N) * Math.PI * 2;
+    g.add(b(size * 0.24, size * 0.24, 0.1, RING,
+      x + Math.cos(a) * r, y + Math.sin(a) * r - size * 0.12, z));
+  }
+
+  // the quarters, drawn as stepped rows so each one reads as a wedge
+  const cells = 6;
+  const step = (size * 0.78) / cells;
+  for (let iy = 0; iy < cells; iy++) {
+    for (let ix = 0; ix < cells; ix++) {
+      const dx = (ix - (cells - 1) / 2) * step;
+      const dy = (iy - (cells - 1) / 2) * step;
+      if (Math.hypot(dx, dy) > size * 0.39) continue;
+      const pale = (dx < 0) === (dy < 0);
+      g.add(b(step * 1.05, step * 1.05, 0.07, pale ? PALE : BLUE,
+        x + dx, y + dy - step * 0.52, z + 0.02));
+    }
+  }
+}
+
 function roomShell(g, { w, d, h = 3.0, wall = 0xd6cec2, floorCol = 0x8a6a45, x = 0, z = 0 }) {
   g.add(floor(w, d, floorCol, 0.03, x, z));
   g.add(b(w, h, 0.3, wall, x, 0, z - d / 2));                 // back wall
@@ -655,8 +690,7 @@ const CONTEXT = {
       g.add(b(2.4, 2.0, 0.06, 0x9fc4d8, dx - 1, 0.45, -6.2));
     }
     g.add(b(2.4, 0.3, 1.6, 0x9aa2a8, -1, 2.9, -5.6));           // entrance canopy
-    const nm = makeText('OFFICE', { cell: 0.075, depth: 0.03, color: 0xdde4e8 });
-    nm.position.set(-1, 3.5, -6.3); g.add(nm);
+    roundel(g, -1, 4.4, -6.32, 1.5);                            // the badge on the wall
 
     g.add(floor(20, 5, 0x9a9689, 0.02, -1, -4.2));               // forecourt
     for (const x of [7.5, 9.0, 10.5]) {                          // bike racks

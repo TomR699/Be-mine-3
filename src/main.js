@@ -22,7 +22,7 @@ import {
   Ending, SkyCutscene, makeGate, makeFireflies, makeTownLights, makeMeteors, makeCity,
 } from './ending.js';
 import { makeSky } from './sky.js';
-import { makeWater } from './water.js';
+import { makeWater, makeOcean } from './water.js';
 import { EffectComposer } from '../vendor/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from '../vendor/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from '../vendor/addons/postprocessing/UnrealBloomPass.js';
@@ -132,7 +132,8 @@ if (LOWPOLY) {
 
 let advanceWind = () => {};
 let advanceWater = () => {};
-let water = null;          // the shader sea, in low-poly mode
+let water = null;
+let ocean = null;          // the shader sea, in low-poly mode
 
 if (LOWPOLY) {
   const terrain = buildLowPolyTerrain(world.height, world.pathMask, SX, SZ, world.spurMask);
@@ -149,9 +150,13 @@ if (LOWPOLY) {
 
   water = makeWater(SX, SZ, world.height);
   scene.add(water.mesh);
+  ocean = makeOcean(SX, SZ);
+  scene.add(ocean.mesh);
 } else {
   const meshes = buildMeshes(world.grid);
   scene.add(meshes.opaque);
+  ocean = makeOcean(SX, SZ);
+  scene.add(ocean.mesh);
   if (meshes.water) {
     scene.add(meshes.water);
     advanceWater = addWaves(meshes.water.material);
@@ -625,7 +630,15 @@ function frame() {
   } else if (LOWPOLY) {
     const g = groundAt(player.pos.x, player.pos.z);
     const want = player.grounded ? g : Math.max(player.pos.y, g);
-    smoothY = smoothY === null ? want : smoothY + (want - smoothY) * Math.min(1, dt * 16);
+    // The smoothing is there to take the steps out of blocky ground under a
+    // smooth surface. It is not there to cover a teleport: the rehearsal
+    // shortcut jumps twenty blocks up to the lookout, and easing into that
+    // drew her deep inside the hill and let her climb out of it over the next
+    // few frames — walking up through the ground to reach the bench. Anything
+    // bigger than a step is a jump, and a jump is not smoothed.
+    smoothY = (smoothY === null || Math.abs(want - smoothY) > 1.5)
+      ? want
+      : smoothY + (want - smoothY) * Math.min(1, dt * 16);
     renderY = smoothY;
   }
   her.root.position.set(player.pos.x, renderY, player.pos.z);
@@ -713,6 +726,7 @@ function frame() {
   fireflies.update(t, dusk);
   townLights.update(t, dusk);
   if (city) city.update(dusk);
+  if (ocean) ocean.update(dusk);
 
   // Lamp light only really exists once the light goes. A pool on the ground at
   // four in the afternoon reads as a stain; the same pool at dusk reads as a
@@ -766,4 +780,4 @@ renderer.domElement.focus();
 frame();
 
 // Expose a little for tuning from the console during the build.
-window.BM = { world, player, input, scene, found, ending, skyScene, lamps, gate, townLights, groundAt, LOWPOLY, sound, begin, GATE_REQUIREMENT, SEA, nodeObjects, markFound, checkGate };
+window.BM = { world, player, input, scene, found, ending, skyScene, lamps, gate, her, him, townLights, groundAt, LOWPOLY, sound, begin, GATE_REQUIREMENT, SEA, nodeObjects, markFound, checkGate };
