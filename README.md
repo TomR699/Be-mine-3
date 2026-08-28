@@ -216,8 +216,25 @@ terraces cut through each other, which leaves a cliff standing in both.
 
 Two more things tie a set to the island rather than leaving it sitting on top
 of one. A **worn spur** is carved from the path to each site, climbing between
-the two and running level once inside the terrace; without it nothing explains
-why there's a flat clearing there. Its mouth is flared where it meets the main
+the two and stopping at the front of it; without it nothing explains why
+there's a flat clearing there.
+
+**The track stops at the door.** It used to run to the site centre, which is
+how a footpath ended up going in one side of Labyrinth and out the other,
+straight across the tennis court and through the clubhouse, and in through the
+kitchen. A path is a way to somewhere; it has no business inside the thing it
+leads to. Each set is turned so its front faces the path — that is what
+`facing` means — so the front edge lies along the line from the site to the
+anchor, one half-depth out, and the track stops a little short of that.
+
+Nothing else walks into a set either: the spur, the cobbles, the boulders and
+the planting are all tested against every footprint, and the rim dressing now
+starts outside the edge rather than at 0.94 of it, which used to put boulders
+in the middle of the club. The main path can't move — it is the route to the
+gate — so instead the *site* is checked against it exactly and moved if it
+isn't clear. Measured over all eleven: **no walkable cell falls under any set's
+geometry**, and what little touches the padding ring around three of them is a
+path passing close to a building, which is what paths do. Its mouth is flared where it meets the main
 path, a **fingerpost** stands just inside it pointing the way, and the track is
 **cobbled** — a worn spur says a track, but set stones say somebody laid it, and
 that they laid it to get somewhere. The stones are filtered to cells the spur
@@ -232,7 +249,8 @@ see. That was most of why it was hard to tell where to go, and the cobbles are
 what turned it up: they looked like they were lying on a lawn. And the **lip of every terrace is dressed**
 with boulders, bushes and grass — rocks clustered on the cut edge, greenery
 spreading further out — which is what hides the seam where the cut meets the
-hillside.
+hillside. Around that goes a band of wildflowers and grass thinning outward,
+and the tracks have sown verges, so a set reads as kept rather than dropped.
 
 Each set then faces back toward the path, so it opens to the direction she
 arrives from.

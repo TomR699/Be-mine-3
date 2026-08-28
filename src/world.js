@@ -34,6 +34,13 @@ function fbm(x, y, seed, octaves = 4) {
 // a room. Terraces, spacing and tree clearance all work in the set's own
 // space, so each one is cut to the shape it actually is.
 
+// A site's grid position is the integer cell it was chosen in, but the set is
+// drawn at the middle of that cell — see `nodes` at the end of generate(). The
+// footprint has to be centred where the set actually stands or every test here
+// is half a block out from the thing it is testing.
+function centreX(site) { return site.x + 0.5; }
+function centreZ(site) { return site.z + 0.5; }
+
 /** World offset (dx, dz) expressed in the set's own axes. */
 function toLocal(site, dx, dz) {
   const c = Math.cos(site.facing), sn = Math.sin(site.facing);
@@ -42,7 +49,7 @@ function toLocal(site, dx, dz) {
 
 /** How far outside a site's footprint a world point falls; 0 means inside. */
 function boxDist(site, x, z) {
-  const [lx, lz] = toLocal(site, x - site.x, z - site.z);
+  const [lx, lz] = toLocal(site, x - centreX(site), z - centreZ(site));
   const qx = Math.max(Math.abs(lx) - site.halfX, 0);
   const qz = Math.max(Math.abs(lz) - site.halfZ, 0);
   return Math.hypot(qx, qz);
@@ -62,7 +69,7 @@ function boxGap(a, b) {
   for (const box of [a, b]) {
     const c = Math.cos(box.facing), sn = Math.sin(box.facing);
     for (const [ux, uz] of [[c, -sn], [sn, c]]) {
-      const centre = Math.abs((b.x - a.x) * ux + (b.z - a.z) * uz);
+      const centre = Math.abs((centreX(b) - centreX(a)) * ux + (centreZ(b) - centreZ(a)) * uz);
       widest = Math.max(widest, centre - extentOn(a, ux, uz) - extentOn(b, ux, uz));
     }
   }
@@ -292,6 +299,7 @@ export function generate() {
             score -= squeeze + alongPath * 2.5;
 
             cand.score = score;
+            cand.crowded = crowded;
             if (onPath === 0 && !crowded) clear.push(cand);
             else {
               cand.score -= onPath * 10 + (crowded ? 60 : 0);
@@ -321,6 +329,36 @@ export function generate() {
       { offsets: [0, 12, -12, 24, -24, 36, -36, 48, -48], range: 3.0, margin: 1 },
     ];
 
+    // The sweep samples a candidate's footprint every other block, which is
+    // fast enough to run on thousands of them and coarse enough to miss the
+    // path clipping a corner. So the winner is checked properly — every cell,
+    // in the set's own space — and if the path really is inside it, the next
+    // best candidate gets the same test.
+    const pathCells = (c) => {
+      const cf = Math.cos(c.facing), sf = Math.sin(c.facing);
+      const seen = new Set();
+      for (let lz = -c.halfZ; lz <= c.halfZ; lz += 1) {
+        for (let lx = -c.halfX; lx <= c.halfX; lx += 1) {
+          const qx = Math.round(c.x + 0.5 + lx * cf + lz * sf);
+          const qz = Math.round(c.z + 0.5 - lx * sf + lz * cf);
+          if (qx < 0 || qz < 0 || qx >= SX || qz >= SZ) continue;
+          const k = qx + qz * SX;
+          if (pathMask[k]) seen.add(k);
+        }
+      }
+      return seen.size;
+    };
+    const pathInside = (c) => pathCells(c) > 0;
+    // When nothing is perfect, the order of the compromises matters. Two
+    // terraces cut through each other leave a cliff standing in both sets;
+    // the path clipping a corner is a footpath that gets a little close. So
+    // an overlap is the last thing to accept, not the first.
+    const tier = (c) => (c.crowded ? 2 : 0) + (pathInside(c) ? 1 : 0);
+    const pickClearest = (pool) => {
+      const ranked = pool.slice().sort((a, b) => (tier(a) - tier(b)) || (b.score - a.score));
+      return ranked[0] || null;
+    };
+
     let fallbackAnchor = base;
     for (const pass of PASSES) {
       const clear = [];       // candidates with no path inside the footprint
@@ -330,12 +368,14 @@ export function generate() {
       }
 
       const pool = clear.length ? clear : compromised;
-      for (const c of pool) if (!best || c.score > best.score) best = c;
-      if (clear.length) break;
+      const pick = pickClearest(pool);
+      if (pick && (!best || pick.score > best.score)) best = pick;
+      if (clear.length && best && !pathInside(best)) break;
       best = null;            // a compromised winner only stands if nothing better turns up
       if (pool.length) fallbackAnchor = pool.reduce((a, b) => (b.score > a.score ? b : a)).pi;
       if (pass === PASSES[PASSES.length - 1]) {
-        for (const c of compromised) if (!best || c.score > best.score) best = c;
+        const last = pickClearest(compromised);
+        if (last && (!best || last.score > best.score)) best = last;
       }
     }
 
@@ -349,6 +389,47 @@ export function generate() {
         facing: Math.atan2(anchor[0] - bx, anchor[1] - bz), pi: fallbackAnchor,
       };
     }
+    // Last resort: shove it clear. For a couple of sets there is nowhere on
+    // the island that is both out of the path and out of its neighbours'
+    // way, and the sweep settles for the path clipping a corner. A few blocks
+    // sideways usually fixes what a whole new site could not — so try, in
+    // increasing order of how far it moves, and keep the first place that is
+    // clear of both. If nothing is, the site stays where the sweep put it.
+    if (pathInside(best)) {
+      // For one or two sets there is nowhere on the island both out of the
+      // path and out of the neighbours' way, and the sweep settles for the
+      // path clipping a corner. A shove sideways usually fixes what a whole
+      // new site could not. Take the least intruding position, nearest first,
+      // and never one that overlaps a neighbour — a footpath crossing a corner
+      // is untidy, but a terrace cut through another set is a cliff.
+      const a2 = path[best.anchor ?? best.pi];
+      let bestMove = best, bestCells = pathCells(best);
+      search:
+      for (let d = 1; d <= 22; d++) {
+        for (let a = 0; a < 24; a++) {
+          const ang = (a / 24) * Math.PI * 2;
+          const cand = {
+            ...best,
+            x: Math.round(best.x + Math.cos(ang) * d),
+            z: Math.round(best.z + Math.sin(ang) * d),
+          };
+          if (cand.x - radius < 1 || cand.z - radius < 1) continue;
+          if (cand.x + radius >= SX - 1 || cand.z + radius >= SZ - 1) continue;
+          const hh = height[cand.x + cand.z * SX];
+          if (hh <= SEA + 1 || hh > 24) continue;
+          cand.facing = Math.atan2(a2[0] - cand.x, a2[1] - cand.z);
+          if (placed.some((o) => boxGap(cand, o) < 2)) continue;
+          const cells = pathCells(cand);
+          if (cells < bestCells) {
+            bestCells = cells;
+            bestMove = cand;
+            if (cells === 0) break search;
+          }
+        }
+      }
+      best = bestMove;
+    }
+
     best.anchor = best.pi;
     sites[i] = best;
     placed.push(best);
@@ -421,6 +502,8 @@ export function generate() {
   // from ten paces and not from fifty; a line of set stones reads from the
   // main path, which is where the decision about whether to turn off is made.
   const cobbles = [];
+  // Grass and flowers along the edge of each track.
+  const verges = [];
   for (let i = 0; i < sites.length; i++) {
     const site = sites[i];
     const pi = site.anchor ?? anchorIndex(i);
@@ -428,37 +511,52 @@ export function generate() {
     const fromH = Math.round(pathH[pi]);
     const toH = height[site.x + site.z * SX];
 
-    const outer = Math.hypot(site.x - px, site.z - pz);
+    // The track stops at the front of the set, not at the middle of it.
+    //
+    // It used to run to the site centre, which is how a footpath ended up
+    // going in one side of Labyrinth and out the other, straight across the
+    // tennis court and through the clubhouse, and in through the kitchen. A
+    // path is a way to somewhere; it has no business inside the thing it
+    // leads to.
+    //
+    // Each set is turned so its front faces the path — that is what `facing`
+    // means — so the front edge lies along the line from the site to the
+    // anchor, one half-depth out. Stopping a little short of that leaves a
+    // gap of ground between the track and the set's own floor, which is what
+    // an entrance looks like.
+    const ax = px - site.x, az = pz - site.z;
+    const al = Math.hypot(ax, az) || 1;
+    const ux = ax / al, uz = az / al;
+    const standoff = Math.min(site.halfZ + 1.6, al - 2);
+    const endX = site.x + ux * standoff;
+    const endZ = site.z + uz * standoff;
+
+    const outer = Math.hypot(endX - px, endZ - pz);
+    if (outer < 2) continue;                  // already at the door
     const steps = Math.ceil(outer * 2);
     for (let sIdx = 0; sIdx <= steps; sIdx++) {
       const t = sIdx / steps;
-      const cx = Math.round(px + (site.x - px) * t);
-      const cz = Math.round(pz + (site.z - pz) * t);
+      const cx = Math.round(px + (endX - px) * t);
+      const cz = Math.round(pz + (endZ - pz) * t);
 
-      // Climb between the path and the lip of the terrace, then run level.
-      // Easing all the way to the centre instead drags the ramp across the
-      // flat ground the set is standing on.
-      const ds = Math.hypot(cx - site.x, cz - site.z);
-      const lip = ds - boxDist(site, cx, cz);   // where the terrace edge is
-      let h;
-      if (ds <= lip) h = toH;
-      else {
-        const u = Math.max(0, Math.min(1, (outer - ds) / Math.max(1, outer - lip)));
-        h = Math.round(fromH + (toH - fromH) * smooth(u));
-      }
+      // Climb the whole way and arrive level with the terrace, since the end
+      // of the track is now the terrace's edge.
+      const h = Math.round(fromH + (toH - fromH) * smooth(t));
+
       // The mouth is flared: wide where it meets the main path, narrowing as
       // it goes, so from the path it reads as an opening rather than a seam.
       const flare = 1 + (1 - Math.min(1, t * 3.2)) * 1.4;
       const tread = 2.1 * flare, edge = tread + 1.1;
 
-      // Lay stones across the track. Two rows per step at half-step spacing,
-      // staggered, with a quarter of them dropped and every one nudged off its
-      // mark — a perfect grid reads as tiling, and this is meant to look like
-      // something worn in rather than laid out.
-      const along = Math.atan2(site.z - pz, site.x - px);
+      const along = Math.atan2(endZ - pz, endX - px);
       const nx = -Math.sin(along), nz = Math.cos(along);   // across the track
+
+      // Lay stones across the track. Two rows per step at half-step spacing,
+      // staggered, with a third dropped and every one nudged off its mark — a
+      // perfect grid reads as tiling, and this is meant to look like something
+      // worn in rather than laid out.
       for (let row = 0; row < 2; row++) {
-        const across = Math.round(tread * 1.6);
+        const across = Math.round(tread * 1.35);
         for (let a = -across; a <= across; a++) {
           const r1 = hash2(i * 131 + sIdx * 7 + row, a * 29 + 11, 4711);
           const r2 = hash2(a * 17 + row, i * 313 + sIdx, 9137);
@@ -467,8 +565,8 @@ export function generate() {
           const lateral = (a * 0.78) + (row ? 0.39 : 0) + (r2 - 0.5) * 0.32;
           if (Math.abs(lateral) > tread * 0.92) continue;
           const stepOff = (row ? 0.5 : 0) + (r3 - 0.5) * 0.3;
-          const bx = px + (site.x - px) * ((sIdx + stepOff) / steps);
-          const bz = pz + (site.z - pz) * ((sIdx + stepOff) / steps);
+          const bx = px + (endX - px) * ((sIdx + stepOff) / steps);
+          const bz = pz + (endZ - pz) * ((sIdx + stepOff) / steps);
           cobbles.push({
             x: bx + nx * lateral,
             z: bz + nz * lateral,
@@ -479,6 +577,19 @@ export function generate() {
           });
         }
       }
+
+      // Verges: grass and the odd flower where the track meets the grass, so
+      // the edge of it is worn rather than cut.
+      for (const side of [1, -1]) {
+        const r1 = hash2(i * 71 + sIdx, side * 13 + 5, 3313);
+        if (r1 < 0.55) continue;
+        const r2 = hash2(sIdx * 11, i * 53 + side, 6607);
+        const off = (tread + 0.5 + r2 * 1.3) * side;
+        const vx = px + (endX - px) * t + nx * off;
+        const vz = pz + (endZ - pz) * t + nz * off;
+        verges.push({ x: vx, z: vz, seed: r2, flower: r1 > 0.9 });
+      }
+
       const reach = Math.ceil(edge);
       for (let dz = -reach; dz <= reach; dz++) {
         for (let dx = -reach; dx <= reach; dx++) {
@@ -488,8 +599,10 @@ export function generate() {
           if (d > edge) continue;
           const k = x + z * SX;
           if (pathMask[k]) continue;
-          // Nor does one set's approach track gouge a channel across another's.
-          if (setMask[k] && setMask[k] !== i + 1) continue;
+          // Never inside a set — its own, or anyone else's. A cell is named
+          // by its corner but covers a whole block, so the test needs a
+          // block's margin or the track clips the first row of the set.
+          if (sites.some((o) => boxDist(o, x, z) <= 1.1)) continue;
           if (d <= tread) { height[k] = h; spurMask[k] = 1; }
           else height[k] = Math.round(height[k] * 0.45 + h * 0.55);
         }
@@ -498,16 +611,15 @@ export function generate() {
 
     // Where this spur leaves the main path, and which way it goes — a
     // signpost stands here.
-    const jdx = (site.x - px), jdz = (site.z - pz);
-    const jl = Math.hypot(jdx, jdz) || 1;
-    const ux = jdx / jl, uz = jdz / jl;
+    // The signpost stands on the track, pointing along it.
+    const sgx = -ux, sgz = -uz;              // from the path toward the set
     junctions.push({
       id: MEMORIES[i].id,
       // A little way up the spur and off to one side of it, so it's the first
       // thing you see when you turn off — and not something you walk through.
-      x: Math.round(px + ux * 5.5 - uz * 4.5),
-      z: Math.round(pz + uz * 5.5 + ux * 4.5),
-      facing: Math.atan2(ux, uz),
+      x: Math.round(px + sgx * 5.5 - sgz * 4.5),
+      z: Math.round(pz + sgz * 5.5 + sgx * 4.5),
+      facing: Math.atan2(sgx, sgz),
     });
   }
 
@@ -604,6 +716,49 @@ export function generate() {
   // where the cut meets the hillside. This is what stops a set reading as an
   // object placed on the island rather than a part of it.
   const decor = [];
+
+  // The verges of each track. Sown after the ground is final so nothing sits
+  // at the wrong height, and never on anything walked.
+  for (const v of verges) {
+    const x = Math.round(v.x), z = Math.round(v.z);
+    if (x < 1 || z < 1 || x >= SX - 1 || z >= SZ - 1) continue;
+    const k = x + z * SX;
+    if (pathMask[k] || spurMask[k]) continue;
+    if (sites.some((o) => boxDist(o, v.x, v.z) <= 0)) continue;
+    const h = height[k];
+    if (h <= SEA + 1) continue;
+    if (v.flower) flowers.push({ x: v.x, y: h + 1, z: v.z, tint: v.seed });
+    else decor.push({ x: v.x, y: h + 1, z: v.z, kind: 'tuft', scale: 0.7 + v.seed * 0.7, seed: v.seed });
+  }
+
+  // And a band of planting around every set: grass and flowers just outside
+  // the level ground, thinning outward. The rim already has rocks and bushes
+  // holding the cut edge together; this is the softer half of it, and it's
+  // what makes a set look kept rather than dropped.
+  for (let i = 0; i < sites.length; i++) {
+    const site = sites[i];
+    const count = Math.round((site.halfX + site.halfZ) * 9);
+    for (let n = 0; n < count; n++) {
+      const r1 = hash2(i * 313 + n, n * 19 + 3, 1201);
+      const r2 = hash2(n * 41 + 7, i * 577 + n, 7717);
+      const r3 = hash2(i + n * 23, n * 11 + i * 5, 4409);
+      const ang = r1 * Math.PI * 2;
+      const R = edgeRadius(site, ang);
+      const x = site.x + Math.cos(ang) * R * (1.02 + r2 * 0.42);
+      const z = site.z + Math.sin(ang) * R * (1.02 + r2 * 0.42);
+      const xi = Math.round(x), zi = Math.round(z);
+      if (xi < 1 || zi < 1 || xi >= SX - 1 || zi >= SZ - 1) continue;
+      const k = xi + zi * SX;
+      if (pathMask[k] || spurMask[k]) continue;
+      if (sites.some((o) => boxDist(o, x, z) <= 0)) continue;
+      const h = height[k];
+      if (h <= SEA + 1) continue;
+      // Flowers cluster near the edge and give way to grass further out.
+      if (r3 < 0.34 - r2 * 0.22) flowers.push({ x, y: h + 1, z, tint: r3 });
+      else decor.push({ x, y: h + 1, z, kind: 'tuft', scale: 0.62 + r3 * 0.8, seed: r3 });
+    }
+  }
+
   for (let i = 0; i < sites.length; i++) {
     const site = sites[i];
     // Scale the dressing to the perimeter, so a long set gets a long verge.
@@ -614,24 +769,29 @@ export function generate() {
       const r3 = hash2(i + n * 17, n * 7 + i * 3, 2027);
 
       const ang = r1 * Math.PI * 2;
-      // a band hugging the lip, mostly just outside the level ground — which
-      // follows the shape of the terrace rather than a circle around it
+      // A band hugging the lip and lying entirely *outside* it. It used to
+      // start at 0.94 of the edge radius, which put boulders and bushes inside
+      // the footprint — rocks in the middle of the club.
       const R = edgeRadius(site, ang);
-      const dist = R * (0.94 + r2 * 0.5);
-      const x = Math.round(site.x + Math.cos(ang) * dist);
-      const z = Math.round(site.z + Math.sin(ang) * dist);
+      const dist = R * (1.03 + r2 * 0.45);
+      const fx = site.x + Math.cos(ang) * dist;
+      const fz = site.z + Math.sin(ang) * dist;
+      const x = Math.round(fx), z = Math.round(fz);
       if (x < 1 || z < 1 || x >= SX - 1 || z >= SZ - 1) continue;
 
       const k = x + z * SX;
       if (pathMask[k] || spurMask[k]) continue;      // not on anything walked
+      if (sites.some((o) => boxDist(o, fx, fz) <= 0)) continue;
       const h = height[k];
       if (h <= SEA + 1) continue;
 
       // rocks cluster on the cut edge, greenery spreads further out
-      const onLip = dist < R * 1.12;
+      const onLip = dist < R * 1.2;
       const kind = r3 < (onLip ? 0.42 : 0.12) ? 'rock' : (r3 < 0.62 ? 'bush' : 'tuft');
+      // Stored where it was tested, not at the centre of the cell it landed
+      // in — a block of slop is enough to put a boulder inside the set.
       decor.push({
-        x: x + 0.5, y: h + 1, z: z + 0.5, kind,
+        x: fx, y: h + 1, z: fz, kind,
         scale: 0.6 + r2 * 0.9, seed: r3,
       });
     }
