@@ -355,6 +355,15 @@
     opacity: 0.7;
   }
 
+  #nowebgl-detail {
+    max-width: 46rem; margin: 1.4rem auto 0; padding: 0.9rem 1.1rem;
+    background: rgba(255,255,255,0.05); border-radius: 6px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.78rem; line-height: 1.5; text-align: left;
+    white-space: pre-wrap; word-break: break-word; opacity: 0.85;
+  }
+  #nowebgl-detail:empty { display: none; }
+
   #nowebgl {
     position: fixed;
     inset: 0;
@@ -429,22 +438,64 @@
 <div id="loading">Building the world…</div>
 
 <div id="nowebgl">
-  <p>This one needs WebGL, and this browser isn't giving us any.<br>
+  <p id="nowebgl-msg">This one needs WebGL, and this browser isn't giving us any.<br>
   Try Chrome, Firefox, or Safari — or a different machine.</p>
+  <pre id="nowebgl-detail"></pre>
 </div>
 
 <script type="importmap">
 { "imports": { "three": "./vendor/three.module.min.js" } }
 </script>
 <script type="module">
-  try {
-    const probe = document.createElement('canvas');
-    if (!probe.getContext('webgl2') && !probe.getContext('webgl')) throw new Error('no webgl');
-    await import('./src/main.js');
-  } catch (err) {
-    console.error(err);
+  // Two different failures used to land on the same screen: a machine with no
+  // WebGL, and any error at all while the game was starting up. The second one
+  // then read as the first, which sent you looking at your graphics driver
+  // when the actual problem was a typo. They're separate now, and whatever
+  // really went wrong is printed rather than swallowed.
+  const fail = (msg, detail) => {
     document.getElementById('loading').hidden = true;
+    document.getElementById('nowebgl-msg').innerHTML = msg;
+    document.getElementById('nowebgl-detail').textContent = detail || '';
     document.getElementById('nowebgl').style.display = 'grid';
+  };
+
+  const probe = document.createElement('canvas');
+  // three.js needs WebGL2; WebGL1 alone is not enough any more.
+  const gl2 = probe.getContext('webgl2');
+  const gl1 = gl2 || probe.getContext('webgl');
+
+  if (!gl1) {
+    fail("This one needs WebGL, and this browser isn't giving us any.<br>" +
+         'Try Chrome, Firefox, or Safari — or a different machine.');
+  } else if (!gl2) {
+    fail('This one needs WebGL 2, and this browser only offers WebGL 1.<br>' +
+         'An up-to-date Chrome, Firefox or Edge should have it.',
+         'renderer: ' + (gl1.getParameter(gl1.RENDERER) || 'unknown'));
+  } else {
+    // Release the probe's context; browsers only allow a handful at once and
+    // the renderer is about to want one of its own.
+    const lose = gl2.getExtension('WEBGL_lose_context');
+    if (lose) lose.loseContext();
+
+    try {
+      await import('./src/main.js');
+    } catch (err) {
+      console.error(err);
+      const text = (err && (err.stack || err.message)) || String(err);
+
+      // By far the most common way this fires after an update: the browser
+      // kept some of the old modules and fetched others fresh, so a new file
+      // asks an old one for something it doesn't export yet. It looks like a
+      // catastrophe and it is fixed by a hard reload.
+      const stale = /does not provide an export|Failed to resolve module|Cannot find module|Importing a module script failed/i.test(text);
+
+      fail(stale
+        ? 'The browser is holding on to an old copy of the game.<br>' +
+          'Hard-reload the page — <b>Ctrl</b> + <b>Shift</b> + <b>R</b>, or ' +
+          '<b>Cmd</b> + <b>Shift</b> + <b>R</b> on a Mac — and it should start.'
+        : 'Something went wrong starting the game — this is a bug, not your machine.',
+        text);
+    }
   }
 </script>
 

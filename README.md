@@ -19,6 +19,22 @@ python3 -m http.server 8000
 
 Any static server works. On GitHub Pages it just works, no configuration.
 
+**If it won't start**, the page now says why instead of blaming your graphics
+card. There are three different screens and they mean different things:
+
+- *"holding on to an old copy"* — the browser cached some modules and fetched
+  others fresh, so a new file is asking an old one for something it doesn't
+  export. This is what you get after a `git pull` without a hard reload.
+  `Ctrl`+`Shift`+`R` fixes it. It's the most common one by a distance.
+- *"needs WebGL 2"* — three.js dropped WebGL 1 support; an up-to-date Chrome,
+  Firefox or Edge has WebGL 2.
+- *"something went wrong starting the game"* — a real bug. The stack is printed
+  underneath it.
+
+All three used to be the same screen, which said the browser wasn't giving us
+any WebGL. Two thirds of the time that was untrue and it sent you looking at
+your graphics driver when the fix was a hard refresh.
+
 ## Controls
 
 | | |
