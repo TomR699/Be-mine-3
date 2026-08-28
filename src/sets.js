@@ -762,19 +762,46 @@ const CONTEXT = {
 
   // An industrial unit on a small parade, with its car park.
   'the-gym'(g) {
-    g.add(b(13, 5.2, 9.5, 0xb9bcc0, 0, 0, -1.2));                // the shed
-    g.add(b(13.6, 0.5, 10.1, 0x6f747a, 0, 5.2, -1.2));
-    g.add(b(13, 0.35, 0.35, 0x8c9096, 0, 3.0, 3.6));             // cladding line
-    g.add(b(4.6, 3.4, 0.2, 0x4a4f55, -3.2, 0, 3.62));            // roller door
-    for (let i = 0; i < 7; i++) g.add(b(4.4, 0.12, 0.06, 0x5f656b, -3.2, 0.4 + i * 0.45, 3.7));
-    g.add(b(1.2, 2.3, 0.16, 0x2b3138, 2.4, 0, 3.62));            // personnel door
-    for (const dx of [1.0, 3.0, 5.0]) {
-      g.add(b(1.4, 1.0, 0.1, 0x35485c, dx, 3.2, 3.62));
-      g.add(b(1.2, 0.8, 0.06, 0x9fc4d8, dx, 3.3, 3.56));
+    // The shutter is up and the front is open, so the gym inside is something
+    // you can see from the path rather than a shed you have to trust. It was a
+    // solid box with the whole set sealed inside it — the rack, the bench, the
+    // dumbbells and the halo marking the memory, all of it behind a wall.
+    const CLAD = 0xb9bcc0, CLAD_D = 0x8c9096, STRUCT = 0x6f747a;
+    const BACK = -5.95, FRONT = 3.35, HW = 6.5, H = 5.2;
+
+    g.add(b(HW * 2, H, 0.4, CLAD, 0, 0, BACK));                  // back wall
+    for (const sx of [-1, 1]) {                                   // side walls
+      g.add(b(0.4, H, FRONT - BACK, CLAD, sx * (HW - 0.2), 0, (FRONT + BACK) / 2));
+      g.add(b(1.5, H, 0.4, CLAD, sx * (HW - 0.75), 0, FRONT));    // corner returns
     }
-    g.add(b(6.0, 1.0, 0.24, 0x1f242a, 0, 4.0, 3.7));             // signage band
-    const nm = makeText('IRONWORKS GYM', { cell: 0.062, depth: 0.04, color: 0xd6dc8e, emissive: 0x3a3d1c });
-    nm.position.set(0, 4.35, 3.86); g.add(nm);
+    g.add(b(HW * 2 + 0.6, 0.5, FRONT - BACK + 0.6, STRUCT, 0, H, (FRONT + BACK) / 2));
+    g.add(b(HW * 2, 1.6, 0.4, CLAD, 0, 3.6, FRONT));             // header over the opening
+    g.add(b(HW * 2, 0.35, 0.5, CLAD_D, 0, 3.3, FRONT));          // cladding line
+
+    // the shutter, rolled up into its drum above the opening
+    g.add(b(9.4, 0.62, 0.62, 0x4a4f55, 0, 2.95, FRONT - 0.35));
+    for (let i = 0; i < 3; i++) {
+      g.add(b(9.4, 0.1, 0.06, 0x5f656b, 0, 2.72 + i * 0.22, FRONT - 0.02));
+    }
+    // and the runners it comes down in
+    for (const sx of [-1, 1]) {
+      g.add(b(0.16, 3.0, 0.3, 0x5f656b, sx * 4.75, 0, FRONT - 0.3));
+    }
+
+    // strip lights inside, so the interior reads even in the shade of the roof
+    for (const z of [-4.4, -1.6, 1.2]) {
+      g.add(b(7.6, 0.14, 0.4, 0xf4f1e6, 0, 4.55, z, { emissive: 0x6a6656 }));
+    }
+
+    g.add(b(6.0, 1.0, 0.24, 0x1f242a, 0, 4.0, FRONT + 0.35));    // signage band
+    const nm = makeText('SSP', { cell: 0.13, depth: 0.05, color: 0xd6dc8e, emissive: 0x3a3d1c });
+    nm.position.set(0, 4.2, FRONT + 0.51); g.add(nm);
+
+    // bollards across the threshold, and a mat
+    for (const x of [-3.4, 0, 3.4]) {
+      g.add(b(0.22, 0.9, 0.22, 0xc8a23a, x, 0, FRONT + 1.1));
+    }
+    g.add(b(9.0, 0.05, 1.2, 0x2f3238, 0, 0.02, FRONT + 0.5, { flat: true }));
 
     g.add(floor(17, 8, 0x4a4d52, 0.02, 0, 8.6));                 // car park
     for (let i = 0; i < 6; i++) {

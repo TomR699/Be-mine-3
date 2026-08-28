@@ -124,7 +124,12 @@ export function makeOcean(sx, sz) {
   geo.rotateX(-Math.PI / 2);
   geo.translate(sx / 2, SURFACE - 0.12, sz / 2);
 
-  const mat = new THREE.MeshBasicMaterial({ color: 0x1d4f70, fog: true });
+  // It writes no depth. The shaded water's waves are displaced downward only —
+  // so the beach isn't flooded — and wherever a trough dipped below this sheet
+  // the sheet won a depth test it had no business being in, and showed through
+  // the sea as a dark slab. Drawn first and writing nothing, it can only ever
+  // be a backdrop.
+  const mat = new THREE.MeshBasicMaterial({ color: 0x1d4f70, fog: true, depthWrite: false });
   const mesh = new THREE.Mesh(geo, mat);
   mesh.renderOrder = -1;
   mesh.frustumCulled = false;

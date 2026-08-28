@@ -184,9 +184,16 @@ export class Character {
       back.position.set(0, headH * 0.5, -0.24);
       this.head.add(back);
     } else {
-      const back = box(0.54, 0.3, 0.14, palette.hair);
-      back.position.set(0, headH * 0.42, -0.26);
+      // Tall enough to reach the cap. It used to stop four hundredths short of
+      // it, which left a band of scalp showing round the back of his head.
+      const back = box(0.54, 0.44, 0.15, palette.hair);
+      back.position.set(0, headH * 0.47, -0.26);
       this.head.add(back);
+      // and a nape below it, so the hair ends on his neck rather than in mid-air
+      const nape = box(0.44, 0.16, 0.13, palette.hairShade);
+      back.position.z = -0.26;
+      nape.position.set(0, headH * 0.16, -0.25);
+      this.head.add(nape);
     }
 
     for (const s of [-1, 1]) {
