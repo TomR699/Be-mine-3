@@ -93,7 +93,10 @@ same thing, for anyone whose browser has that chord bound to an extension, and a
 build stamp so you can tell whether the browser is running the file you think it
 is.
 
-The camera is free — orbit, zoom, the lot.
+The camera is free — orbit, zoom, the lot. It is the mouse's job alone. `Q` and
+`Shift`+`E` used to spin it too, which nothing documented and which meant that
+running up to a memory — `Shift` to run, `E` to look — swung the view every
+time, and holding both just kept turning.
 
 Whether she's on the ground is a probe of the ground beneath her, not an
 inference from whether the last downward move collided. At 60fps she falls
@@ -215,9 +218,18 @@ Two more things tie a set to the island rather than leaving it sitting on top
 of one. A **worn spur** is carved from the path to each site, climbing between
 the two and running level once inside the terrace; without it nothing explains
 why there's a flat clearing there. Its mouth is flared where it meets the main
-path, and a **fingerpost** stands just inside it pointing the way — a track you
-have to look for is the same as no track at all, and not knowing where to go is
-the one thing that will pull her out of it. And the **lip of every terrace is dressed**
+path, a **fingerpost** stands just inside it pointing the way, and the track is
+**cobbled** — a worn spur says a track, but set stones say somebody laid it, and
+that they laid it to get somewhere. The stones are filtered to cells the spur
+actually cut, which is only known once every spur is carved: laying them as it
+went scattered them over the grass alongside, and a paved verge next to an
+unpaved track is worse than no paving.
+
+For a long time none of this was visible at all. `buildLowPolyTerrain` was only
+ever handed `pathMask`, so in the default renderer the spurs were cut, levelled
+and then coloured as grass — invisible. Widening them changed nothing you could
+see. That was most of why it was hard to tell where to go, and the cobbles are
+what turned it up: they looked like they were lying on a lawn. And the **lip of every terrace is dressed**
 with boulders, bushes and grass — rocks clustered on the cut edge, greenery
 spreading further out — which is what hides the seam where the cut meets the
 hillside.

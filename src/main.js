@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { generate, SEA, SX, SZ } from './world.js';
 import {
-  buildLowPolyTerrain, buildLowPolyTrees, buildScatter,
+  buildLowPolyTerrain, buildLowPolyTrees, buildScatter, buildCobbles,
   makeGroundSampler, addTreeWind,
 } from './lowpoly.js';
 
@@ -133,7 +133,7 @@ let advanceWater = () => {};
 let water = null;          // the shader sea, in low-poly mode
 
 if (LOWPOLY) {
-  const terrain = buildLowPolyTerrain(world.height, world.pathMask, SX, SZ);
+  const terrain = buildLowPolyTerrain(world.height, world.pathMask, SX, SZ, world.spurMask);
   scene.add(terrain);
 
   const trees = buildLowPolyTrees(world.trees);
@@ -141,6 +141,9 @@ if (LOWPOLY) {
   advanceWind = addTreeWind(trees.material);
 
   scene.add(buildScatter(world.decor));
+  // Stones set into each spur, so the way off the path is something you can
+  // see rather than something you have to notice.
+  scene.add(buildCobbles(world.cobbles, groundAt));
 
   water = makeWater(SX, SZ, world.height);
   scene.add(water.mesh);
@@ -155,6 +158,9 @@ if (LOWPOLY) {
     scene.add(meshes.foliage);
     advanceWind = addWind(meshes.foliage.material, 0.11);
   }
+  // Voxel mode is meant to be a true A/B of the same world, so it gets the
+  // cobbles too — sat on top of the blocky ground rather than the smooth one.
+  scene.add(buildCobbles(world.cobbles, (x, z) => world.grid.columnTop(x, z) + 1));
 }
 scene.add(makeFlowerField(world.flowers));
 
@@ -513,7 +519,7 @@ function frame() {
   const dt = Math.min(0.05, clock.getDelta());
   const t = clock.elapsedTime;
 
-  input.update(dt);
+  input.update();
 
   if (started && !noteOpen && !journalOpen && !ending.locksInput && !skyScene.locksInput) {
     player.update(dt, input);

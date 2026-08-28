@@ -417,6 +417,10 @@ export function generate() {
   // for is the same as no spur at all.
   const spurMask = new Uint8Array(SX * SZ);
   const junctions = [];
+  // Cobbles laid along each spur. The track being a different colour reads
+  // from ten paces and not from fifty; a line of set stones reads from the
+  // main path, which is where the decision about whether to turn off is made.
+  const cobbles = [];
   for (let i = 0; i < sites.length; i++) {
     const site = sites[i];
     const pi = site.anchor ?? anchorIndex(i);
@@ -446,6 +450,35 @@ export function generate() {
       // it goes, so from the path it reads as an opening rather than a seam.
       const flare = 1 + (1 - Math.min(1, t * 3.2)) * 1.4;
       const tread = 2.1 * flare, edge = tread + 1.1;
+
+      // Lay stones across the track. Two rows per step at half-step spacing,
+      // staggered, with a quarter of them dropped and every one nudged off its
+      // mark — a perfect grid reads as tiling, and this is meant to look like
+      // something worn in rather than laid out.
+      const along = Math.atan2(site.z - pz, site.x - px);
+      const nx = -Math.sin(along), nz = Math.cos(along);   // across the track
+      for (let row = 0; row < 2; row++) {
+        const across = Math.round(tread * 1.6);
+        for (let a = -across; a <= across; a++) {
+          const r1 = hash2(i * 131 + sIdx * 7 + row, a * 29 + 11, 4711);
+          const r2 = hash2(a * 17 + row, i * 313 + sIdx, 9137);
+          const r3 = hash2(sIdx * 5 + a, i * 97 + row * 3, 2609);
+          if (r1 < 0.34) continue;                       // gaps in the paving
+          const lateral = (a * 0.78) + (row ? 0.39 : 0) + (r2 - 0.5) * 0.32;
+          if (Math.abs(lateral) > tread * 0.92) continue;
+          const stepOff = (row ? 0.5 : 0) + (r3 - 0.5) * 0.3;
+          const bx = px + (site.x - px) * ((sIdx + stepOff) / steps);
+          const bz = pz + (site.z - pz) * ((sIdx + stepOff) / steps);
+          cobbles.push({
+            x: bx + nx * lateral,
+            z: bz + nz * lateral,
+            // Smaller and sparser at the edges, so the track has a worn middle.
+            scale: (0.74 + r2 * 0.42) * (1 - 0.28 * Math.abs(lateral) / tread),
+            rot: along + (r3 - 0.5) * 0.9,
+            seed: r3,
+          });
+        }
+      }
       const reach = Math.ceil(edge);
       for (let dz = -reach; dz <= reach; dz++) {
         for (let dx = -reach; dx <= reach; dx++) {
@@ -477,6 +510,18 @@ export function generate() {
       facing: Math.atan2(ux, uz),
     });
   }
+
+  // Keep only the stones that landed on ground the spur actually cut. The
+  // track gives way to the main path and to any terrace it meets, so where it
+  // is carved isn't known until every spur is done — laying stones as it went
+  // scattered them across the grass beside it, and a paved verge next to an
+  // unpaved track is worse than no paving at all.
+  const laid = cobbles.filter((s2) => {
+    const k = Math.round(s2.x) + Math.round(s2.z) * SX;
+    return k >= 0 && k < spurMask.length && spurMask[k];
+  });
+  cobbles.length = 0;
+  cobbles.push(...laid);
 
   // Where a terrace runs up against the path, ease between the two rather than
   // leaving a step. The path can't be re-levelled — it's the route to the gate
@@ -640,7 +685,7 @@ export function generate() {
 
   return {
     grid, height, pathMask, spurMask, lamps, nodes, flowers, trees, decor, gate,
-    junctions, spawn: SPAWN, lookout: LOOKOUT, heading,
+    junctions, cobbles, spawn: SPAWN, lookout: LOOKOUT, heading,
   };
 }
 

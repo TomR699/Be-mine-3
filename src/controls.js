@@ -19,7 +19,12 @@ export class Input {
       if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(k)) e.preventDefault();
     });
     addEventListener('keyup', (e) => this.keys.delete(e.code));
+    // A key held while focus leaves never sends its keyup, so it stays down
+    // for ever — she comes back to a character running on her own.
     addEventListener('blur', () => this.keys.clear());
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) this.keys.clear();
+    });
 
     dom.addEventListener('pointerdown', (e) => {
       this.dragging = true;
@@ -66,9 +71,12 @@ export class Input {
     return { x: vx / len, z: vz / len };
   }
 
-  update(dt) {
-    if (this.has('KeyQ')) this.orbit.yaw += dt * 1.8;
-    if (this.has('KeyE') && this.keys.has('ShiftLeft')) this.orbit.yaw -= dt * 1.8;
+  update() {
+    // Q and Shift+E used to spin the camera. Nothing documented them, the
+    // mouse already orbits, and Shift+E is *run plus interact* — so running up
+    // to a memory and pressing E swung the view every time. Holding both just
+    // kept turning. Two live keys is too high a price for a hidden third way
+    // to do something the mouse does better.
   }
 
   consumeInteract() { const v = this.interactPressed; this.interactPressed = false; return v; }

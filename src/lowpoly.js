@@ -18,6 +18,9 @@ const PALETTE = {
   grass: new THREE.Color(0x74a94f),
   grassDry: new THREE.Color(0x93ab55),
   path: new THREE.Color(0xc0a877),
+  // A spur is a track to somewhere, not the road itself: greener and less
+  // worn, so it reads as a turning rather than a fork.
+  spur: new THREE.Color(0xb2a479),
   sand: new THREE.Color(0xe0cd94),
   rock: new THREE.Color(0x8d8a97),
   snow: new THREE.Color(0xecf1f6),
@@ -75,7 +78,14 @@ function jitter(x, z, amount) {
  * one normal, which is what produces the faceted look — shared vertices would
  * smooth it back into a blob.
  */
-export function buildLowPolyTerrain(height, pathMask, sx, sz) {
+/**
+ * `spurMask` was missing here for a long time and the spurs were simply never
+ * drawn — the ground under them was cut and levelled and then coloured as
+ * grass, so the tracks out to each set were invisible in the default renderer.
+ * Widening them changed nothing you could see. That is most of why it was hard
+ * to tell where to go.
+ */
+export function buildLowPolyTerrain(height, pathMask, sx, sz, spurMask = null) {
   const vh = cornerHeights(height, sx, sz);
   const w = sx + 1;
 
@@ -105,7 +115,12 @@ export function buildLowPolyTerrain(height, pathMask, sx, sz) {
 
       // Colour by what this cell is, with a little per-cell variation.
       if (pathMask[i]) c.copy(PALETTE.path);
-      else if (h <= SEA) c.copy(PALETTE.sand);
+      else if (spurMask && spurMask[i]) {
+        // jitter() returns about 1.0 — it is a multiplier, not a 0..1 value.
+        // Passing it straight to lerp sent the spur colour all the way back to
+        // grass, which is a track you cannot see.
+        c.copy(PALETTE.spur).lerp(PALETTE.grass, Math.max(0, jitter(x, z, 0.4) - 0.9));
+      } else if (h <= SEA) c.copy(PALETTE.sand);
       else if (h <= SEA + 1) c.copy(PALETTE.sand).lerp(PALETTE.grass, 0.35);
       else if (h > 34) c.copy(PALETTE.snow);
       else if (h > 30) c.copy(PALETTE.rock);
@@ -245,6 +260,82 @@ export function addTreeWind(material, strength = 0.34) {
   };
   material.needsUpdate = true;
   return (t) => { if (ref) ref.uniforms.uTime.value = t; };
+}
+
+/**
+ * The cobbles set into the track out to each set.
+ *
+ * A worn spur says a track; stones say somebody laid it, and that they laid it
+ * to get somewhere. They're flat, low and irregular, turned roughly with the
+ * direction of travel and tilted a little each way so no two catch the light
+ * identically — a paving of perfectly flat stones reads as a texture rather
+ * than as objects.
+ *
+ * All of them merge into one geometry: a couple of thousand stones for one
+ * draw call.
+ */
+export function buildCobbles(items, groundAt) {
+  if (!items.length) return new THREE.Group();
+
+  // Six sides and no bottom cap. Twelve triangles a stone, and there are
+  // thousands of them: the underside is buried and the saving is real.
+  const stoneGeo = new THREE.CylinderGeometry(1, 0.82, 1, 6, 1, true).toNonIndexed();
+  const capGeo = new THREE.CircleGeometry(1, 6).toNonIndexed().rotateX(-Math.PI / 2)
+    .translate(0, 0.5, 0);
+  stoneGeo.computeVertexNormals();
+  capGeo.computeVertexNormals();
+
+  const TONES = [0x9a959b, 0x8c8790, 0xa39ea1, 0x847f89, 0x928d93];
+  const pos = [], nrm = [], col = [];
+  const m = new THREE.Matrix4();
+  const q = new THREE.Quaternion();
+  const e = new THREE.Euler();
+  const c = new THREE.Color();
+
+  for (const d of items) {
+    const s = d.scale;
+    const y = groundAt(d.x, d.z);
+    // A gentle tilt in both axes, so the surface of the track isn't a plane.
+    e.set((d.seed - 0.5) * 0.22, d.rot, (((d.seed * 7) % 1) - 0.5) * 0.22);
+    q.setFromEuler(e);
+    m.compose(
+      new THREE.Vector3(d.x, y + 0.02, d.z),
+      q,
+      // Wider than long across the track, and very shallow: most of each stone
+      // is under the ground, which is what stops them reading as pebbles
+      // scattered on top of it.
+      new THREE.Vector3(0.36 * s, 0.16 * s, 0.3 * s)
+    );
+
+    c.setHex(TONES[Math.floor(d.seed * 617) % TONES.length]);
+    c.multiplyScalar(0.88 + d.seed * 0.24);
+
+    for (const src of [stoneGeo, capGeo]) {
+      const g = src.clone().applyMatrix4(m);
+      const p = g.attributes.position.array;
+      const nn = g.attributes.normal.array;
+      for (let i = 0; i < p.length; i += 3) {
+        pos.push(p[i], p[i + 1], p[i + 2]);
+        nrm.push(nn[i], nn[i + 1], nn[i + 2]);
+        col.push(c.r, c.g, c.b);
+      }
+      g.dispose();
+    }
+  }
+  stoneGeo.dispose();
+  capGeo.dispose();
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3));
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  geo.computeBoundingSphere();
+
+  const mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({
+    vertexColors: true, flatShading: true,
+  }));
+  mesh.receiveShadow = true;
+  return mesh;
 }
 
 /**
