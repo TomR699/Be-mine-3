@@ -412,7 +412,11 @@ export function generate() {
 
   // A worn track from the path to each set. Without one they read as things
   // dropped on the island rather than places anyone ever walked to.
+  // Wide enough to read as a turning off the path rather than as a worn line
+  // in the grass. Getting lost was the complaint, and a spur you have to look
+  // for is the same as no spur at all.
   const spurMask = new Uint8Array(SX * SZ);
+  const junctions = [];
   for (let i = 0; i < sites.length; i++) {
     const site = sites[i];
     const pi = site.anchor ?? anchorIndex(i);
@@ -438,21 +442,40 @@ export function generate() {
         const u = Math.max(0, Math.min(1, (outer - ds) / Math.max(1, outer - lip)));
         h = Math.round(fromH + (toH - fromH) * smooth(u));
       }
-      for (let dz = -2; dz <= 2; dz++) {
-        for (let dx = -2; dx <= 2; dx++) {
+      // The mouth is flared: wide where it meets the main path, narrowing as
+      // it goes, so from the path it reads as an opening rather than a seam.
+      const flare = 1 + (1 - Math.min(1, t * 3.2)) * 1.4;
+      const tread = 2.1 * flare, edge = tread + 1.1;
+      const reach = Math.ceil(edge);
+      for (let dz = -reach; dz <= reach; dz++) {
+        for (let dx = -reach; dx <= reach; dx++) {
           const x = cx + dx, z = cz + dz;
           if (x < 0 || z < 0 || x >= SX || z >= SZ) continue;
           const d = Math.hypot(dx, dz);
-          if (d > 2) continue;
+          if (d > edge) continue;
           const k = x + z * SX;
           if (pathMask[k]) continue;
           // Nor does one set's approach track gouge a channel across another's.
           if (setMask[k] && setMask[k] !== i + 1) continue;
-          if (d <= 1.3) { height[k] = h; spurMask[k] = 1; }
+          if (d <= tread) { height[k] = h; spurMask[k] = 1; }
           else height[k] = Math.round(height[k] * 0.45 + h * 0.55);
         }
       }
     }
+
+    // Where this spur leaves the main path, and which way it goes — a
+    // signpost stands here.
+    const jdx = (site.x - px), jdz = (site.z - pz);
+    const jl = Math.hypot(jdx, jdz) || 1;
+    const ux = jdx / jl, uz = jdz / jl;
+    junctions.push({
+      id: MEMORIES[i].id,
+      // A little way up the spur and off to one side of it, so it's the first
+      // thing you see when you turn off — and not something you walk through.
+      x: Math.round(px + ux * 5.5 - uz * 4.5),
+      z: Math.round(pz + uz * 5.5 + ux * 4.5),
+      facing: Math.atan2(ux, uz),
+    });
   }
 
   // Where a terrace runs up against the path, ease between the two rather than
@@ -617,7 +640,7 @@ export function generate() {
 
   return {
     grid, height, pathMask, spurMask, lamps, nodes, flowers, trees, decor, gate,
-    spawn: SPAWN, lookout: LOOKOUT, heading,
+    junctions, spawn: SPAWN, lookout: LOOKOUT, heading,
   };
 }
 

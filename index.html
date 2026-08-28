@@ -207,6 +207,13 @@
   #journal-list li.missing { opacity: 0.45; font-style: italic; }
 
   /* --- the ending --- */
+  /* The curtain the ending fades to. Above everything, and inert until the
+     outro raises its opacity, so it can never swallow a click by accident. */
+  #curtain {
+    position: fixed; inset: 0; background: #000;
+    opacity: 0; pointer-events: none; z-index: 60;
+    transition: opacity 0.25s linear;
+  }
   #letterbox { position: fixed; inset: 0; pointer-events: none; }
   #letterbox .bar {
     position: absolute;
@@ -391,6 +398,8 @@
     <button onclick="document.getElementById('journal').hidden = true">Close</button>
   </div>
 </div>
+
+<div id="curtain"></div>
 
 <div id="letterbox" hidden>
   <div class="bar top"></div>

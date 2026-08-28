@@ -30,7 +30,8 @@ Any static server works. On GitHub Pages it just works, no configuration.
 | scroll | zoom |
 | `E` | look closer at a memory |
 | `Esc` | the journal of what she's found |
-| `Space` | during the ending, move to the next line |
+| `Enter` | during the bench scene, a burst of hearts — press it as often as you like |
+| `Esc` | during the bench scene, pull back off the island and fade to black |
 | `M` | mute |
 | `Ctrl`+`Shift`+`E` | rehearsal shortcut: find everything and jump to the ending |
 | `Ctrl`+`Shift`+`X` | wipe progress and reload, for a clean hand-over |
@@ -107,6 +108,15 @@ the faces that touch air — the inside of the terrain costs nothing. The whole
 island is two draw calls (solid and water) rather than a quarter of a million
 individual boxes.
 
+**Lamplight is light, not a decal.** The pool under a lamp is a disc with a
+radial falloff, drawn additively so the grass and the path read through it, and
+every vertex is dropped onto the real ground height so it drapes over a slope
+instead of slicing through it. A flat quad of solid colour on lumpy ground is
+half-buried at one end and floating at the other, which is exactly what a yellow
+square on the grass looks like. A very faint cone joins the pool to the bulb.
+None of it exists in daylight — a pool of light at four in the afternoon reads
+as a stain.
+
 **Small scenery is props, not blocks.** Flowers and lamps are real geometry
 rather than voxels, because a full-block flower looks like chewing gum and a
 full-block lamp post looks like a wall. Flowers are instanced, so hundreds of
@@ -147,7 +157,10 @@ terraces cut through each other, which leaves a cliff standing in both.
 Two more things tie a set to the island rather than leaving it sitting on top
 of one. A **worn spur** is carved from the path to each site, climbing between
 the two and running level once inside the terrace; without it nothing explains
-why there's a flat clearing there. And the **lip of every terrace is dressed**
+why there's a flat clearing there. Its mouth is flared where it meets the main
+path, and a **fingerpost** stands just inside it pointing the way — a track you
+have to look for is the same as no track at all, and not knowing where to go is
+the one thing that will pull her out of it. And the **lip of every terrace is dressed**
 with boulders, bushes and grass — rocks clustered on the cut edge, greenery
 spreading further out — which is what hides the seam where the cut meets the
 hillside.
@@ -188,7 +201,14 @@ pushes in very slowly.
 
 Then nothing. No lines, no question, no buttons. **That's the point — the
 talking happens in the room.** If she says yes and you want the sky to agree,
-`Enter` sets off a burst of hearts.
+`Enter` sets off a burst of hearts — and it's spammable, because one burst is a
+gesture and leaning on the key is a reaction. Bursts pile up rather than cutting
+each other off, capped at twelve so a thumb can't cost you the frame rate.
+
+`Esc` from the bench is the way out: the camera pulls all the way back off the
+island until the two of them are a detail on a hillside, and it fades to black.
+It's there so the game has an ending you can reach rather than a frame it sits
+on forever.
 
 `Ctrl`+`Shift`+`E` jumps straight there with everything found.
 
@@ -207,6 +227,15 @@ sounds periodic; the sea is darker noise on a slow swell that rises as she
 approaches the water; and a quiet held chord opens up and warms as dusk falls,
 so the world sounds later rather than only looking it. Each memory rings a soft
 bell a step further up the scale, so collecting them climbs.
+
+**Labyrinth you hear before you see.** What you actually hear standing in a
+smoking area is not the track — it's the kick and the bassline through a wall
+with everything above a few hundred hertz taken out. So that's all it is: four
+to the floor, a two-bar bass figure, and a heavy lowpass over the pair. No hats,
+no melody; adding those makes it a stereo in a field rather than a room you're
+stood outside of. It fades up over the last sixty metres and the wall opens
+slightly as she gets closer. Beats are scheduled a fraction of a second ahead
+from the frame loop rather than looped, so it costs nothing when she's away.
 
 Browsers refuse to start audio until the user interacts with the page, which is
 why the title card exists — it is the gesture that turns the sound on.
@@ -251,6 +280,13 @@ bright sky.
 It's the emotional hinge of the story, so it changes the world rather than
 just adding another note. Move the flag to a different entry and the hinge
 moves with it.
+
+**It's a cutscene, because it was happening behind her.** The sky used to turn
+while she was mid-stride looking at the ground. Now closing that memory hands
+the camera over: it lifts off her shoulder and drifts round until she's small
+against the sky, the light goes, the shower runs, and after about twelve seconds
+it gives everything back. There is nothing to press — nothing to skip past, so
+no skip. `SkyCutscene` in `ending.js`.
 
 ## The part that needs you
 

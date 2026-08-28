@@ -19,6 +19,7 @@ export class Sound {
     this.muted = false;
     this.dusk = 0;
     this.nearSea = 0;
+    this.nearClub = 0;
   }
 
   /** Must be called from inside a real user gesture. */
@@ -46,6 +47,7 @@ export class Sound {
     this._buildWind();
     this._buildSea();
     this._buildPad();
+    this._buildClub();
 
     this.ready = true;
   }
@@ -152,6 +154,89 @@ export class Sound {
     this.padFilter.connect(this.padGain).connect(this.master);
   }
 
+  /**
+   * The club, heard from outside it.
+   *
+   * What you actually hear standing in a smoking area is not the track — it's
+   * the kick and the bassline coming through a wall, with everything above a
+   * few hundred hertz taken out of it. So that is all this is: four to the
+   * floor, a two-bar bass figure under it, and a heavy lowpass over the pair
+   * of them. No hats, no melody. Adding those makes it sound like a stereo in
+   * the open air rather than a room you are standing outside of.
+   *
+   * It's scheduled a beat at a time from `update()` rather than looped, so it
+   * costs nothing at all when she is nowhere near it.
+   */
+  _buildClub() {
+    const ctx = this.ctx;
+    this.clubGain = ctx.createGain();
+    this.clubGain.gain.value = 0.0001;
+
+    // The wall. Everything above this is simply not there from outside.
+    this.clubMuffle = ctx.createBiquadFilter();
+    this.clubMuffle.type = 'lowpass';
+    this.clubMuffle.frequency.value = 190;
+    this.clubMuffle.Q.value = 0.9;
+
+    this.clubMuffle.connect(this.clubGain).connect(this.master);
+    this._nextBeat = 0;
+    this._beat = 0;
+  }
+
+  /** Schedule any club beats due in the next fraction of a second. */
+  _scheduleClub() {
+    const ctx = this.ctx;
+    const now = ctx.currentTime;
+    if (this._nextBeat === 0) this._nextBeat = now + 0.1;
+    // Backgrounding the tab stops the frame loop while the audio clock keeps
+    // going. Without this the next frame schedules every beat it missed, all
+    // in the past, and they all fire at once.
+    if (this._nextBeat < now - 0.5) this._nextBeat = now + 0.05;
+
+    const SPB = 60 / 126;              // 126bpm, which is about right for it
+    while (this._nextBeat < now + 0.25) {
+      const at = this._nextBeat;
+      this._kick(at);
+      // A bass note on the offbeat of every other beat — enough to imply a
+      // tune without ever being one you could name.
+      if (this._beat % 2 === 1) {
+        const notes = [55, 55, 65.41, 58.27];
+        this._bass(at + SPB * 0.5, notes[(this._beat >> 1) % notes.length]);
+      }
+      this._beat++;
+      this._nextBeat += SPB;
+    }
+  }
+
+  _kick(at) {
+    const ctx = this.ctx;
+    const o = ctx.createOscillator();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(115, at);
+    o.frequency.exponentialRampToValueAtTime(42, at + 0.09);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, at);
+    g.gain.exponentialRampToValueAtTime(0.9, at + 0.008);
+    g.gain.exponentialRampToValueAtTime(0.0001, at + 0.3);
+    o.connect(g).connect(this.clubMuffle);
+    o.start(at);
+    o.stop(at + 0.36);
+  }
+
+  _bass(at, freq) {
+    const ctx = this.ctx;
+    const o = ctx.createOscillator();
+    o.type = 'square';           // the muffle takes the edge off it entirely
+    o.frequency.value = freq;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, at);
+    g.gain.exponentialRampToValueAtTime(0.28, at + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, at + 0.22);
+    o.connect(g).connect(this.clubMuffle);
+    o.start(at);
+    o.stop(at + 0.26);
+  }
+
   /** A soft struck bell, for opening a memory. */
   chime(semitone = 0) {
     if (!this.ready || this.muted) return;
@@ -235,10 +320,11 @@ export class Sound {
   /**
    * Called every frame. `seaProximity` is 0 inland, 1 at the water's edge.
    */
-  update(dusk, seaProximity) {
+  update(dusk, seaProximity, clubProximity = 0) {
     if (!this.ready) return;
     const t = this.ctx.currentTime;
     this.dusk = dusk;
+    this.nearClub = clubProximity;
 
     if (!this._endingStarted) {
       // the pad warms and opens as the light goes
@@ -246,6 +332,15 @@ export class Sound {
       this.padGain.gain.setTargetAtTime(0.045 + dusk * 0.05, t, 1.5);
       this.windGain.gain.setTargetAtTime(0.05 - dusk * 0.015, t, 2);
       this.seaGain.gain.setTargetAtTime(seaProximity * 0.14, t, 0.8);
+
+      // The club. Quiet, and only running while she's near enough to hear it.
+      // Walking away opens the wall up very slightly before it fades, the way
+      // sound does when you get out from behind a building.
+      const club = Math.max(0.0001, clubProximity * 0.30);
+      this.clubGain.gain.setTargetAtTime(club, t, 0.9);
+      this.clubMuffle.frequency.setTargetAtTime(150 + clubProximity * 110, t, 1.2);
+      if (clubProximity > 0.02) this._scheduleClub();
+      else this._nextBeat = 0;
     }
   }
 }

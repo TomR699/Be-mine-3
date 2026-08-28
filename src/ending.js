@@ -18,7 +18,8 @@ export class Ending {
     this.state = 'locked';
     this.timer = 0;
     this.mark = new THREE.Vector3();
-    this.hearts = null;
+    this.hearts = [];
+    this.outro = null;
     this.forcedY = null;
     this.camPush = 0;
   }
@@ -68,7 +69,8 @@ export class Ending {
   }
 
   update(dt) {
-    if (this.hearts) this.updateHearts(dt);
+    if (this.hearts.length) this.updateHearts(dt);
+    if (this.outro) this.updateOutro(dt);
 
     if (this.state === 'walking') this.updateWalking(dt);
     else if (this.state === 'seated') this.timer += dt;
@@ -113,6 +115,8 @@ export class Ending {
       return;
     }
 
+    if (this.outro) return;   // the outro drives the camera itself
+
     // Seated: settle behind and above them, framing the town beyond.
     this.camPush = Math.min(1, this.camPush + dt * 0.045);
     const ease = 1 - Math.pow(1 - this.camPush, 3);
@@ -139,7 +143,12 @@ export class Ending {
    * says yes and you want the sky to agree, Enter sets off the hearts.
    */
   celebrate() {
-    if (this.state !== 'seated' || this.hearts) return;
+    if (this.state !== 'seated') return;
+    // Spammable on purpose. One burst is a gesture; leaning on the key is a
+    // reaction, and that's the bit that belongs to whoever is in the room.
+    // Old bursts are kept until they fade, so they pile up rather than cut
+    // each other off — capped, so holding the key can't drown the frame rate.
+    if (this.hearts.length >= 12) return;
 
     const N = 180;
     const geo = new THREE.BufferGeometry();
@@ -162,23 +171,154 @@ export class Ending {
       color: 0xff6e92, size: 0.34, transparent: true, opacity: 1,
       depthWrite: false, blending: THREE.AdditiveBlending,
     });
-    this.hearts = new THREE.Points(geo, mat);
-    this.hearts.userData.vel = vel;
-    this.hearts.userData.age = 0;
-    this.scene.add(this.hearts);
+    const burst = new THREE.Points(geo, mat);
+    burst.userData.vel = vel;
+    burst.userData.age = 0;
+    this.scene.add(burst);
+    this.hearts.push(burst);
   }
 
   updateHearts(dt) {
-    const h = this.hearts;
-    h.userData.age += dt;
-    const p = h.geometry.attributes.position;
-    for (let i = 0; i < p.count; i++) {
-      const v = h.userData.vel[i];
-      v.y -= 7 * dt;
-      p.setXYZ(i, p.getX(i) + v.x * dt, p.getY(i) + v.y * dt, p.getZ(i) + v.z * dt);
+    for (let i = this.hearts.length - 1; i >= 0; i--) {
+      const h = this.hearts[i];
+      h.userData.age += dt;
+      const p = h.geometry.attributes.position;
+      for (let j = 0; j < p.count; j++) {
+        const v = h.userData.vel[j];
+        v.y -= 7 * dt;
+        p.setXYZ(j, p.getX(j) + v.x * dt, p.getY(j) + v.y * dt, p.getZ(j) + v.z * dt);
+      }
+      p.needsUpdate = true;
+      h.material.opacity = Math.max(0, 1 - h.userData.age / 5);
+      if (h.userData.age > 5) {
+        this.scene.remove(h);
+        h.geometry.dispose();
+        h.material.dispose();
+        this.hearts.splice(i, 1);
+      }
     }
-    p.needsUpdate = true;
-    h.material.opacity = Math.max(0, 1 - h.userData.age / 5);
+  }
+
+  /**
+   * The way out. Escape from the bench pulls the camera all the way back off
+   * the island and fades to black — a curtain, so the game has an ending you
+   * can choose to reach rather than a frame it sits on forever.
+   */
+  finish() {
+    if (this.state !== 'seated' || this.outro) return;
+    this.outro = { t: 0, from: this.camera.position.clone() };
+  }
+
+  updateOutro(dt) {
+    const o = this.outro;
+    o.t += dt;
+    const DUR = 7;
+    const k = Math.min(1, o.t / DUR);
+    const ease = k * k * (3 - 2 * k);
+
+    // Pull back and up, away from the bench, until the two of them are a
+    // detail on a hillside.
+    const b = this.bench;
+    const fx = Math.sin(b.facing), fz = Math.cos(b.facing);
+    const back = 6.4 + ease * 78;
+    this.camera.position.set(
+      b.x - fx * back + fz * (1.1 + ease * 10),
+      b.y + 2.3 + ease * 46,
+      b.z - fz * back - fx * (1.1 + ease * 10)
+    );
+    this.camera.lookAt(b.x, b.y + 1.0, b.z);
+
+    // The fade runs behind the pull-back and lands a beat after it stops.
+    const fade = Math.max(0, Math.min(1, (o.t - DUR * 0.45) / (DUR * 0.62)));
+    if (this.ui.fade) this.ui.fade.style.opacity = fade.toFixed(3);
+  }
+}
+
+/**
+ * The night she watches the sky turn.
+ *
+ * Finding the meteor-shower memory is the hinge of the whole story, and it
+ * used to happen while she was mid-stride looking at the ground. So it takes
+ * the controls for a moment: the camera swings round and tilts up, the sky
+ * goes over into night, the shower runs, and then it hands everything back.
+ *
+ * It ends on its own — no key to press. Nothing is skippable here because
+ * there is nothing to skip past; it is over in about twelve seconds.
+ */
+export class SkyCutscene {
+  constructor(opts) {
+    // camera, player, ui  (ui: { letterbox, hud })
+    Object.assign(this, opts);
+    this.active = false;
+    this.t = 0;
+    this.done = false;
+    this._look = new THREE.Vector3();
+  }
+
+  get locksInput() { return this.active; }
+  get inControlOfCamera() { return this.active; }
+
+  /** How fast the sky should be easing while this runs. */
+  get skyRate() { return this.active ? 1.35 : 0.5; }
+
+  start() {
+    if (this.active || this.done) return;
+    this.active = true;
+    this.done = true;
+    this.t = 0;
+    this.from = this.camera.position.clone();
+    this.ui.letterbox.hidden = false;
+    this.ui.hud.forEach((el) => { el.hidden = true; });
+    document.body.classList.add('cinematic');
+  }
+
+  end() {
+    this.active = false;
+    this.ui.letterbox.hidden = true;
+    this.ui.hud.forEach((el) => { el.hidden = false; });
+    document.body.classList.remove('cinematic');
+  }
+
+  update(dt) {
+    if (!this.active) return;
+    this.t += dt;
+    const DUR = 12;
+
+    const p = this.player.pos;
+    // Rise off her shoulder and drift round, so the sky fills the frame and
+    // she stays in the bottom of it — she is watching it too.
+    const k = Math.min(1, this.t / 4.5);
+    const ease = k * k * (3 - 2 * k);
+    const ang = 2.1 + this.t * 0.06;
+    const dist = 13 - ease * 3.5;
+
+    const want = new THREE.Vector3(
+      p.x + Math.sin(ang) * dist,
+      p.y + 1.8 + ease * 1.5,
+      p.z + Math.cos(ang) * dist
+    );
+    // Never let the shot sink into a hillside on the way up.
+    if (this.groundAt) {
+      want.y = Math.max(want.y, this.groundAt(want.x, want.z) + 1.2);
+    }
+    // Take over from wherever the follow camera was rather than cutting to
+    // the new position — a hard cut here reads as a glitch, not as a shot.
+    const blend = Math.min(1, this.t / 1.1);
+    this.camera.position.copy(this.from).lerp(want, blend * blend * (3 - 2 * blend));
+
+    // The look target lifts from her to above the horizon — but only about
+    // thirty degrees. Aiming straight up fills the frame with sky and loses
+    // both her and the island; the shot wants both, with the sky over them.
+    const aim = new THREE.Vector3(
+      p.x - Math.sin(ang) * 26,
+      p.y + 1 + ease * 8,
+      p.z - Math.cos(ang) * 26
+    );
+    if (this.t < dt * 2) this._look.copy(aim);
+    this._look.lerp(aim, Math.min(1, dt * 1.6));
+    this.camera.lookAt(this._look);
+
+    if (this.t >= DUR) this.end();
   }
 }
 

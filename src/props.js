@@ -223,3 +223,171 @@ export function makeGlow(color = 0xffd98a, size = 3.2, opacity = 0.22) {
   m.rotation.x = -Math.PI / 2;
   return m;
 }
+
+/**
+ * A fingerpost at the mouth of a spur, pointing off the main path.
+ *
+ * The spurs are wide now, but a widened track still doesn't tell you there's
+ * anywhere at the end of it — the complaint was not knowing where to go, and
+ * the honest fix for that is a sign. It points the way the spur runs and
+ * carries a small warm bead on top so it reads at dusk as well as at noon.
+ *
+ * Built along +Z, so setting rotation.y to the direction of the set points it
+ * at the set.
+ */
+export function makeSignpost() {
+  const g = new THREE.Group();
+  const WOOD = 0x6b4f36, PLANK = 0x94714b;
+
+  g.add(b(0.17, 2.3, 0.17, WOOD, 0, 0));
+  // A board, not a stick with a bump on it. Pale against the grass and the
+  // trees so it catches the eye from back down the path, with a wedge on the
+  // end so it reads as pointing rather than just sticking out.
+  g.add(b(0.1, 0.44, 1.9, PLANK, 0, 1.66, 0.95));
+  const tip = b(0.1, 0.33, 0.33, PLANK, 0, 1.72, 1.95);
+  tip.rotation.x = Math.PI / 4;
+  g.add(tip);
+  // A brace under the board, so it doesn't look glued on.
+  const brace = b(0.09, 0.7, 0.09, WOOD, 0, 1.1, 0.42);
+  brace.rotation.x = -0.62;
+  g.add(brace);
+  g.add(b(0.3, 0.15, 0.3, WOOD, 0, 2.3));
+
+  const beadMat = new THREE.MeshLambertMaterial({
+    color: 0xffe0a4, emissive: new THREE.Color(0x6b4d16),
+  });
+  const bead = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 0.2), beadMat);
+  bead.position.y = 2.54;
+  g.add(bead);
+
+  return g;
+}
+
+/**
+ * The pool of light a lamp throws on the ground.
+ *
+ * This was a flat square plane of solid colour, which is exactly what it
+ * looked like: a yellow square lying on the grass. Three things fix that.
+ *
+ * It's a **disc with a radial falloff**, so it has no edge — brightest under
+ * the lamp, gone by the rim, with the curve biased so most of the light sits
+ * in the middle rather than spreading evenly.
+ *
+ * It **drapes over the terrain**. Every vertex is dropped onto the real ground
+ * height, so on a slope the pool follows the slope instead of slicing through
+ * it. A flat quad on lumpy ground is half-buried on one side and floating on
+ * the other, and that reads as a decal rather than as light.
+ *
+ * And it's **additive**, so it brightens what's under it rather than painting
+ * over it — the grass and the path still read through the light, which is what
+ * makes it look like light and not like paint.
+ */
+export function makeLightPool(cx, cz, groundAt, {
+  radius = 4.2, color = 0xffce7a, rings = 7, spokes = 22,
+} = {}) {
+  const pos = [], alpha = [], idx = [];
+
+  // A fan: centre vertex, then rings of vertices out to the rim.
+  pos.push(0, groundAt(cx, cz) + 0.06, 0);
+  alpha.push(1);
+  for (let r = 1; r <= rings; r++) {
+    const t = r / rings;
+    const rad = radius * t;
+    for (let sIdx = 0; sIdx < spokes; sIdx++) {
+      const a = (sIdx / spokes) * Math.PI * 2;
+      const dx = Math.cos(a) * rad, dz = Math.sin(a) * rad;
+      pos.push(dx, groundAt(cx + dx, cz + dz) + 0.06, dz);
+      // Squared falloff, so it fades the way light does rather than linearly.
+      alpha.push(Math.pow(1 - t, 2.1));
+    }
+  }
+  for (let sIdx = 0; sIdx < spokes; sIdx++) {
+    idx.push(0, 1 + sIdx, 1 + ((sIdx + 1) % spokes));
+  }
+  for (let r = 1; r < rings; r++) {
+    const a0 = 1 + (r - 1) * spokes, b0 = 1 + r * spokes;
+    for (let sIdx = 0; sIdx < spokes; sIdx++) {
+      const n = (sIdx + 1) % spokes;
+      idx.push(a0 + sIdx, b0 + sIdx, b0 + n);
+      idx.push(a0 + sIdx, b0 + n, a0 + n);
+    }
+  }
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.setAttribute('alpha', new THREE.Float32BufferAttribute(alpha, 1));
+  geo.setIndex(idx);
+
+  const mat = new THREE.ShaderMaterial({
+    uniforms: {
+      uColor: { value: new THREE.Color(color) },
+      uStrength: { value: 0 },
+    },
+    vertexShader: `
+      attribute float alpha;
+      varying float vAlpha;
+      void main() {
+        vAlpha = alpha;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }`,
+    fragmentShader: `
+      uniform vec3 uColor;
+      uniform float uStrength;
+      varying float vAlpha;
+      void main() {
+        gl_FragColor = vec4(uColor * vAlpha * uStrength, 1.0);
+      }`,
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+    // The pool belongs to the ground it lies on; fogging it separately makes
+    // it float free of the terrain in the distance.
+    fog: false,
+  });
+
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.position.set(cx, 0, cz);
+  mesh.renderOrder = 2;
+  mesh.frustumCulled = false;
+  return { mesh, mat };
+}
+
+/**
+ * The cone of light between a lit lamp head and its pool. Very faint — it is
+ * the thing that connects the two so the pool reads as thrown by the lamp
+ * rather than painted on the floor underneath it.
+ */
+export function makeLightCone(topY, bottomY, radius = 1.7, color = 0xffce7a) {
+  const h = Math.max(0.5, topY - bottomY);
+  const geo = new THREE.CylinderGeometry(0.16, radius, h, 18, 1, true);
+
+  const mat = new THREE.ShaderMaterial({
+    uniforms: { uColor: { value: new THREE.Color(color) }, uStrength: { value: 0 } },
+    vertexShader: `
+      varying float vDown;
+      void main() {
+        // 0 at the lamp, 1 at the ground
+        vDown = 0.5 - position.y / ${h.toFixed(4)};
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }`,
+    fragmentShader: `
+      uniform vec3 uColor;
+      uniform float uStrength;
+      varying float vDown;
+      void main() {
+        // Brightest just below the bulb, faded out well before the ground, so
+        // the cone never draws a hard rim where it meets the pool.
+        float a = smoothstep(1.0, 0.12, vDown) * 0.085;
+        gl_FragColor = vec4(uColor * a * uStrength, 1.0);
+      }`,
+    transparent: true,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+    blending: THREE.AdditiveBlending,
+    fog: false,
+  });
+
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.position.y = bottomY + h / 2;
+  return { mesh, mat };
+}

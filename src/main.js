@@ -11,11 +11,14 @@ const LOWPOLY = new URLSearchParams(location.search).get('style') !== 'voxel';
 import { buildMeshes, addWind, addWaves } from './voxel.js';
 import { Character, HER, HIM } from './character.js';
 import { Input, Player, FollowCamera } from './controls.js';
-import { makeProp, makeHalo, makeGlow, makeFlowerField, makeLamp } from './props.js';
+import {
+  makeProp, makeHalo, makeGlow, makeFlowerField, makeLamp, makeLightPool, makeLightCone,
+  makeSignpost,
+} from './props.js';
 import { makeSet, HERO_OFFSET } from './sets.js';
 import { GATE_REQUIREMENT, HER_NAME, TITLE_LINE } from './memories.js';
 import { Sound } from './audio.js';
-import { Ending, makeGate, makeFireflies, makeTownLights, makeMeteors } from './ending.js';
+import { Ending, SkyCutscene, makeGate, makeFireflies, makeTownLights, makeMeteors } from './ending.js';
 import { makeSky } from './sky.js';
 import { makeWater } from './water.js';
 import { EffectComposer } from '../vendor/addons/postprocessing/EffectComposer.js';
@@ -38,6 +41,7 @@ const ui = {
   journal: document.getElementById('journal'),
   journalList: document.getElementById('journal-list'),
   letterbox: document.getElementById('letterbox'),
+  curtain: document.getElementById('curtain'),
   line: document.getElementById('line'),
   ask: document.getElementById('ask'),
   question: document.getElementById('question'),
@@ -98,10 +102,11 @@ composer.addPass(new RenderPass(scene, camera));
 const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.55, 0.75, 0.72);
 composer.addPass(bloom);
 
-// Shallow depth of field. Blocks read as a handmade diorama rather than a
-// screenshot of Minecraft largely because of this — the eye is told what to
-// look at, and the far hills go soft the way a miniature does.
-const dof = new BokehPass(scene, camera, { focus: 14, aperture: 0.00016, maxblur: 0.006 });
+// A whisper of depth of field. It used to be a lot stronger, which read as a
+// handmade diorama but also softened the whole island and the sky along with
+// it — and the sky is worth looking at. Now it only takes the hard edge off
+// the very near foreground, and everything past her stays sharp.
+const dof = new BokehPass(scene, camera, { focus: 14, aperture: 0.00004, maxblur: 0.0016 });
 composer.addPass(dof);
 
 composer.addPass(new OutputPass());
@@ -192,17 +197,32 @@ for (const node of world.nodes) {
 
 // Path lamps. Each lights as she remembers more, so the route behind her
 // fills with light she made.
+const groundFor = (x, z) => (LOWPOLY ? groundAt(x, z) : world.grid.columnTop(x, z) + 1);
 const lamps = world.lamps.map((l) => {
   const { group, headMat } = makeLamp();
   group.position.set(l.x, l.y, l.z);
   scene.add(group);
 
-  const glow = makeGlow(0xffd98a, 6, 0);
-  glow.position.set(l.x, l.y + 0.06, l.z);
-  scene.add(glow);
+  // A pool of light that follows the ground, and a faint cone joining it to
+  // the bulb — see makeLightPool. Both are additive and both start dark.
+  const pool = makeLightPool(l.x, l.z, groundFor, { radius: 4.6 });
+  scene.add(pool.mesh);
+  const cone = makeLightCone(l.y + 2.97, l.y, 2.2);
+  cone.mesh.position.x = l.x;
+  cone.mesh.position.z = l.z;
+  scene.add(cone.mesh);
 
-  return { headMat, glow, lit: false };
+  return { headMat, pool, cone, lit: false, glowAt: 0 };
 });
+
+// A fingerpost where each spur leaves the main path, pointing at what's down
+// it. The spur alone doesn't say there is anywhere at the end of it.
+for (const j of world.junctions) {
+  const post = makeSignpost();
+  post.position.set(j.x + 0.5, groundFor(j.x + 0.5, j.z + 0.5), j.z + 0.5);
+  post.rotation.y = j.facing;
+  scene.add(post);
+}
 
 // --- characters ---------------------------------------------------------
 const her = new Character(HER);
@@ -316,7 +336,6 @@ function refreshCounter() {
     lamp.lit = on;
     lamp.headMat.color.setHex(on ? 0xffe9a8 : 0x6e6684);
     lamp.headMat.emissive.setHex(on ? 0x6b4d16 : 0x000000);
-    lamp.glow.material.opacity = on ? 0.3 : 0;
   });
 }
 
@@ -336,7 +355,7 @@ function markFound(n, silent) {
     save();
     refreshCounter();
     checkGate();
-    if (n.node.turns === 'night') pendingShower = true;
+    if (n.node.turns === 'night') { pendingShower = true; pendingSky = true; }
     // each memory a semitone up the scale, so collecting them climbs
     sound.chime([0, 2, 4, 7, 9, 11, 12, 14, 16, 19, 21][found.size % 11]);
   }
@@ -346,6 +365,12 @@ function markFound(n, silent) {
 const ending = new Ending({
   scene, camera, her, him, player, gate,
   bench: { x: benchPos.x, y: benchPos.y, z: benchPos.z, facing: benchFacing, seatHer, seatHim },
+  ui: { letterbox: ui.letterbox, hud: [ui.counter, ui.hint], fade: ui.curtain },
+});
+
+// The sky turning is its own short scene — see SkyCutscene.
+const skyScene = new SkyCutscene({
+  camera, player, groundAt: LOWPOLY ? groundAt : null,
   ui: { letterbox: ui.letterbox, hud: [ui.counter, ui.hint] },
 });
 
@@ -407,12 +432,21 @@ addEventListener('keydown', (e) => {
   // No words, no buttons — but Enter during the bench scene sets off the
   // hearts, if she says yes and you want the sky to say something.
   if (e.code === 'Enter' && ending.state === 'seated') { ending.celebrate(); return; }
+  // Escape from the bench is the way out: the camera pulls back off the
+  // island and it fades to black. Escape is the journal everywhere else, so
+  // this has to come first.
+  if (e.code === 'Escape' && ending.state === 'seated') { ending.finish(); return; }
   if (e.code === 'Space' && ending.locksInput) return;
+  // The sky scene runs itself — but not at the cost of the two shortcuts that
+  // exist precisely for when something has gone wrong.
+  if (skyScene.locksInput && !(e.ctrlKey && e.shiftKey)) return;
 
   // Rehearsal shortcut: jump to the ending with everything found. For your
   // dry run, and for the unthinkable case of something going wrong in the room.
   if (e.code === 'KeyE' && e.ctrlKey && e.shiftKey) {
     nodeObjects.forEach((n) => { if (!n.node.found) markFound(n); });
+    pendingSky = false;
+    skyScene.end();
     const l = world.lookout;
     const ry = LOWPOLY ? groundAt(l.x + 0.5, l.z + 0.5) : world.grid.columnTop(l.x, l.z) + 1;
     player.pos.set(l.x + 0.5, ry, l.z + 0.5);
@@ -453,6 +487,12 @@ const sunDir = new THREE.Vector3(1, 0.5, 0.3);
 // The shower is held back until the sky has actually darkened. Firing it the
 // instant she opens the memory wastes it against a bright sky.
 let pendingShower = false;
+// The scene waits for the note to be closed — she should be looking at the
+// island when the camera takes over, not at a paragraph.
+let pendingSky = false;
+// Labyrinth is audible from about here out.
+const CLUB_EARSHOT = 62;
+const clubNode = world.nodes.find((n) => n.id === 'outside-the-club') || null;
 let dusk = 0;
 let smoothY = null;
 let nearest = null;
@@ -464,7 +504,7 @@ function frame() {
 
   input.update(dt);
 
-  if (started && !noteOpen && !journalOpen && !ending.locksInput) {
+  if (started && !noteOpen && !journalOpen && !ending.locksInput && !skyScene.locksInput) {
     player.update(dt, input);
   }
   gate.update(dt);
@@ -489,7 +529,10 @@ function frame() {
   her.update(dt, noteOpen ? 0 : player.speed, player.grounded);
   him.update(dt, 0, true);
 
-  if (!ending.inControlOfCamera) follow.update(dt, player.pos, input.orbit);
+  skyScene.update(dt);
+  if (!ending.inControlOfCamera && !skyScene.inControlOfCamera) {
+    follow.update(dt, player.pos, input.orbit);
+  }
 
   // Sun follows the player so shadows stay sharp across a large world.
   sun.position.set(player.pos.x + 45, player.pos.y + 70, player.pos.z + 28);
@@ -510,8 +553,15 @@ function frame() {
   const duskTarget = nightTurned
     ? Math.min(1, 0.66 + progress * 0.34)
     : progress * 0.5;
-  // Eased, so the change reads as the sky turning rather than a hard cut.
-  dusk += (duskTarget - dusk) * Math.min(1, dt * 0.5);
+  // Eased, so the change reads as the sky turning rather than a hard cut —
+  // but quicker while the cutscene holds the camera, so the whole turn happens
+  // inside the shot she is watching it in.
+  dusk += (duskTarget - dusk) * Math.min(1, dt * skyScene.skyRate);
+
+  if (pendingSky && !noteOpen && !journalOpen) {
+    pendingSky = false;
+    skyScene.start();
+  }
 
   if (pendingShower && dusk > 0.55) {
     pendingShower = false;
@@ -523,7 +573,15 @@ function frame() {
   const groundHere = LOWPOLY ? groundAt(player.pos.x, player.pos.z)
                              : world.grid.columnTop(player.pos.x, player.pos.z) + 1;
   const seaNear = Math.max(0, Math.min(1, 1 - (groundHere - (SEA + 1)) / 9));
-  sound.update(dusk, seaNear);
+  // And how close to the club? You hear Labyrinth before you see it — that's
+  // most of what standing outside one is.
+  let clubNear = 0;
+  if (clubNode) {
+    const d = Math.hypot(player.pos.x - clubNode.x, player.pos.z - clubNode.z);
+    clubNear = Math.max(0, Math.min(1, (CLUB_EARSHOT - d) / (CLUB_EARSHOT - 12)));
+    clubNear *= clubNear;              // falls off the way sound does
+  }
+  sound.update(dusk, seaNear, clubNear);
 
   sky.update(dusk, sunDir, t);
   sky.mesh.position.copy(camera.position);
@@ -551,6 +609,20 @@ function frame() {
   fireflies.update(t, dusk);
   townLights.update(t, dusk);
 
+  // Lamp light only really exists once the light goes. A pool on the ground at
+  // four in the afternoon reads as a stain; the same pool at dusk reads as a
+  // lamp. Each one also eases on rather than snapping, and breathes very
+  // slightly, so a lit path looks alive.
+  const lampNight = Math.max(0, Math.min(1, (dusk - 0.18) / 0.5));
+  for (let i = 0; i < lamps.length; i++) {
+    const lamp = lamps[i];
+    const want = lamp.lit ? lampNight : 0;
+    lamp.glowAt += (want - lamp.glowAt) * Math.min(1, dt * 1.6);
+    const flicker = 0.94 + Math.sin(t * 1.7 + i * 2.3) * 0.06;
+    lamp.pool.mat.uniforms.uStrength.value = lamp.glowAt * 0.85 * flicker;
+    lamp.cone.mat.uniforms.uStrength.value = lamp.glowAt * flicker;
+  }
+
   if (input.consumeInteract() && !noteOpen && !journalOpen && !ending.locksInput && nearest) {
     markFound(nearest);
     openNote(nearest.node);
@@ -559,8 +631,8 @@ function frame() {
   // Focus tracks her distance from the camera, so she is always sharp.
   const focusDist = camera.position.distanceTo(her.root.position);
   dof.uniforms.focus.value += (focusDist - dof.uniforms.focus.value) * Math.min(1, dt * 2.5);
-  // The ending is intimate: tighter focus, more falloff.
-  const wantAperture = ending.inControlOfCamera ? 0.00022 : 0.00016;
+  // The ending is intimate, and it's the one place the softness earns itself.
+  const wantAperture = ending.inControlOfCamera ? 0.00010 : 0.00004;
   dof.uniforms.aperture.value +=
     (wantAperture - dof.uniforms.aperture.value) * Math.min(1, dt * 0.8);
 
@@ -592,4 +664,4 @@ renderer.domElement.focus();
 frame();
 
 // Expose a little for tuning from the console during the build.
-window.BM = { world, player, input, scene, found, ending, gate, townLights, groundAt, LOWPOLY, sound, begin, GATE_REQUIREMENT, SEA, nodeObjects, markFound, checkGate };
+window.BM = { world, player, input, scene, found, ending, skyScene, lamps, gate, townLights, groundAt, LOWPOLY, sound, begin, GATE_REQUIREMENT, SEA, nodeObjects, markFound, checkGate };
