@@ -46,8 +46,8 @@ const ALL = [
     title: 'Outside the club',
     when: 'the night you said it first',
     text: 'You pulled me outside to tell me you were really interested in '
-        + 'getting to know me. The mature talk that followed made me realise you were the exact kind of',
-        + 'mature sweet girl Id love to date.',
+        + 'getting to know me. The mature talk that followed made me realise '
+        + 'you were the exact kind of mature, sweet girl I’d love to date.',
   },
   {
     id: 'kitchen-5am',
