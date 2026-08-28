@@ -460,9 +460,6 @@
   </div>
 </div>
 
-<script type="importmap">
-{ "imports": { "three": "./vendor/three.module.min.js" } }
-</script>
 <script>
   // Recovery has to live outside the module graph.
   //
@@ -476,7 +473,55 @@
   // The key is repeated here rather than imported, deliberately: the point is
   // that this works when the imports don't.
   var BE_MINE_SAVE = 'be-mine-3.save.v1';
-  var BE_MINE_BUILD = '2026-08-28c';
+  var BE_MINE_BUILD = '2026-08-28d';
+
+  // Cache-busting, because there is no build step and GitHub Pages tells the
+  // browser it may keep every file for ten minutes. That's fine for a site
+  // that changes weekly and useless for one being fixed while someone waits:
+  // a fresh index.html will happily import a stale main.js, or a new main.js
+  // will ask an old props.js for an export it hasn't got.
+  //
+  // So every module is fetched at a URL carrying the build stamp. New build,
+  // new URLs, nothing to serve from cache — and they all change together, so
+  // a half-updated mixture can't happen.
+  //
+  // The import map has to exist before any module loads, and it has to name
+  // the files: a prefix mapping can't append a query string. Anything left off
+  // this list still works, it just isn't cache-busted — so if you add a
+  // module, add it here.
+  (function () {
+    var MODULES = [
+      'main', 'world', 'voxel', 'character', 'controls', 'props', 'lowpoly',
+      'audio', 'sky', 'water', 'sets', 'text3d', 'ending', 'memories',
+    ];
+    // Both what src/ imports and what those in turn pull in — a dependency
+    // one level down is cached just as hard as one at the top.
+    var ADDONS = [
+      'postprocessing/EffectComposer', 'postprocessing/RenderPass',
+      'postprocessing/UnrealBloomPass', 'postprocessing/BokehPass',
+      'postprocessing/OutputPass', 'postprocessing/ShaderPass',
+      'postprocessing/MaskPass', 'postprocessing/Pass',
+      'shaders/CopyShader', 'shaders/OutputShader',
+      'shaders/LuminosityHighPassShader', 'shaders/BokehShader',
+    ];
+    var v = '?v=' + BE_MINE_BUILD;
+    var base = new URL('.', document.baseURI).pathname;
+    var imports = { three: base + 'vendor/three.module.min.js' + v };
+
+    MODULES.forEach(function (m) {
+      imports[base + 'src/' + m + '.js'] = base + 'src/' + m + '.js' + v;
+    });
+    ADDONS.forEach(function (a) {
+      var path = base + 'vendor/addons/' + a + '.js';
+      imports[path] = path + v;
+    });
+
+    var tag = document.createElement('script');
+    tag.type = 'importmap';
+    tag.textContent = JSON.stringify({ imports: imports });
+    document.head.appendChild(tag);
+    window.BE_MINE_ENTRY = base + 'src/main.js';
+  }());
 
   function beMineWipe() {
     try { localStorage.removeItem(BE_MINE_SAVE); } catch (e) { /* nothing to clear */ }
@@ -527,7 +572,7 @@
     if (lose) lose.loseContext();
 
     try {
-      await import('./src/main.js');
+      await import(window.BE_MINE_ENTRY || './src/main.js');
     } catch (err) {
       console.error(err);
       const text = (err && (err.stack || err.message)) || String(err);

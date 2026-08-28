@@ -31,6 +31,21 @@ card. There are three different screens and they mean different things:
 - *"something went wrong starting the game"* — a real bug. The stack is printed
   underneath it.
 
+**Caching.** There is no build step, and GitHub Pages tells the browser it may
+keep every file for ten minutes. That's fine for a site that changes weekly and
+useless for one being fixed while somebody waits — a fresh `index.html` will
+happily import a stale `main.js`, or a new `main.js` will ask an old `props.js`
+for an export it hasn't got. So `index.html` generates an import map at load
+naming every module with the build stamp as a query string. New build, new URLs,
+nothing served from cache, and they all change together so a half-updated
+mixture can't happen. `BE_MINE_BUILD` at the top of `index.html` is the stamp;
+bump it when you deploy. If you add a module to `src/`, add it to the list
+beside it — anything missing still works, it just isn't cache-busted.
+
+`index.html` itself is the one file this can't protect, since it's what carries
+the map. If it's stale, open the page with any query string on the end — 
+`…/Be-mine-3/?v=2` — which is a different URL and so a different cache entry.
+
 **A note on testing this.** The game has a save, so the state it is in every
 time after the first is *loaded*, not fresh — and a fresh load exercises less of
 the startup path. A saved game with nine memories arrives with the gate already
