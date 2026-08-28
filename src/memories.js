@@ -20,7 +20,7 @@
  * Her name, on the title card.
  * >>> REPLACE THIS. It's the first thing she reads.
  */
-export const HER_NAME = 'Summer';
+export const HER_NAME = 'Summer, what led me to you';
 
 /** The line under her name on the title card. Yours to change. */
 export const TITLE_LINE = 'a place made out of us';
