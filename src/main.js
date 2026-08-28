@@ -368,21 +368,30 @@ const ending = new Ending({
   ui: { letterbox: ui.letterbox, hud: [ui.counter, ui.hint], fade: ui.curtain },
 });
 
+// Silent until start(), which the title card calls — but constructed here,
+// with everything else, rather than down beside the card it is started from.
+// Startup can reach it (a saved game arrives with the gate already unlocked),
+// and a const declared further down the file is not merely undefined at that
+// point, it throws.
+const sound = new Sound();
+
 // The sky turning is its own short scene — see SkyCutscene.
 const skyScene = new SkyCutscene({
   camera, player, groundAt: LOWPOLY ? groundAt : null,
   ui: { letterbox: ui.letterbox, hud: [ui.counter, ui.hint] },
 });
 
-function checkGate() {
+function checkGate(silent) {
   if (found.size >= GATE_REQUIREMENT && ending.state === 'locked') {
     ending.unlock();
-    sound.swell();
+    // Opening the gate is a moment; finding it already open because she's
+    // reloading a save is not. Only the first one gets the swell.
+    if (!silent) sound.swell();
   }
 }
 
 refreshCounter();
-checkGate();
+checkGate(true);
 
 // --- note panel ---------------------------------------------------------
 let noteOpen = false;
@@ -640,9 +649,6 @@ function frame() {
 }
 
 // --- title card ----------------------------------------------------------
-// Browsers won't let audio start until the user has interacted with the page,
-// so the card doubles as the gesture that turns the sound on.
-const sound = new Sound();
 let started = false;
 
 ui.titleName.textContent = HER_NAME;

@@ -31,6 +31,13 @@ card. There are three different screens and they mean different things:
 - *"something went wrong starting the game"* — a real bug. The stack is printed
   underneath it.
 
+**A note on testing this.** The game has a save, so the state it is in every
+time after the first is *loaded*, not fresh — and a fresh load exercises less of
+the startup path. A saved game with nine memories arrives with the gate already
+open, which runs code a new game doesn't reach for another twenty minutes. Every
+check written here cleared `localStorage` first, and a crash on exactly that
+path survived all of them. Load it from a save at 0, 1, 8, 9 and 11 found.
+
 All three used to be the same screen, which said the browser wasn't giving us
 any WebGL. Two thirds of the time that was untrue and it sent you looking at
 your graphics driver when the fix was a hard refresh.
