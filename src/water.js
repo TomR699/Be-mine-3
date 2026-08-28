@@ -108,8 +108,12 @@ void main() {
  * Build the sea. `height` is the terrain heightmap, used to bake how deep the
  * water is at every vertex so the shader knows where the shore is.
  */
-export function makeWater(sx, sz, height, segments = 160) {
-  const geo = new THREE.PlaneGeometry(sx, sz, segments, segments);
+export function makeWater(sx, sz, height, segments = 200) {
+  // The sea runs well past the island. It used to stop exactly at the island's
+  // bounds, so from anywhere high the water simply ended and the sky started —
+  // and there was nowhere to put anything on the horizon.
+  const SPREAD = 3;
+  const geo = new THREE.PlaneGeometry(sx * SPREAD, sz * SPREAD, segments, segments);
   geo.rotateX(-Math.PI / 2);
   geo.translate(sx / 2, SURFACE, sz / 2);
 

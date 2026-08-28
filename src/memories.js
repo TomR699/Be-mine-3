@@ -123,18 +123,6 @@ const ALL = [
         + 'unreasonable quantity of snacks. The first nights I didn’t want '
         + 'to go home.',
   },
-  {
-    id: 'i-love-you',
-    prop: 'flowers',
-    title: 'The night I told you',
-    when: 'and I meant it',
-    // >>> THIS ONE IS MINE, NOT YOURS — I wasn't there and you haven't told me
-    // >>> what happened. Rewrite it. Say where you were standing and what she
-    // >>> did when you said it; that detail is the entire memory.
-    text: 'I told you I loved you. I\u2019d been carrying it around for a while '
-        + 'by then, waiting for a moment good enough, and in the end I just '
-        + 'said it. You already know what happened next.',
-  },
 ];
 
 /**

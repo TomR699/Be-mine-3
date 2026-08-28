@@ -225,6 +225,103 @@ export function makeGlow(color = 0xffd98a, size = 3.2, opacity = 0.22) {
 }
 
 /**
+ * The bench at the top — the one the game ends on.
+ *
+ * The memory props include a bench, and that is what was up here: 1.5 units
+ * wide and four boxes, which is fine as something to notice from a path and
+ * thin as the thing two people sit on for the last minute of the game. This
+ * one is a park bench: slatted seat and back, cast ends, arms, and a plaque.
+ * Its seat is at 0.5, the height the seating maths in main.js expects.
+ */
+export function makeLookoutBench() {
+  const g = new THREE.Group();
+  const SLAT = 0x7d5636, SLAT_D = 0x64432a, IRON = 0x35333c;
+
+  for (let i = 0; i < 4; i++) {                      // seat slats
+    g.add(b(2.6, 0.07, 0.16, i % 2 ? SLAT_D : SLAT, 0, 0.43, -0.24 + i * 0.2));
+  }
+  for (let i = 0; i < 3; i++) {                      // back slats
+    const y = 0.62 + i * 0.22;
+    const back = b(2.6, 0.16, 0.07, i % 2 ? SLAT_D : SLAT, 0, y, -0.34);
+    back.rotation.x = -0.16;
+    g.add(back);
+  }
+  for (const sx of [-1, 1]) {
+    // cast ends: a foot, a leg, and the curl of the arm
+    g.add(b(0.1, 0.44, 0.5, IRON, sx * 1.2, 0, -0.05));
+    g.add(b(0.16, 0.07, 0.62, IRON, sx * 1.2, 0, -0.05));
+    g.add(b(0.1, 0.42, 0.1, IRON, sx * 1.2, 0.5, -0.32));
+    g.add(b(0.1, 0.07, 0.56, IRON, sx * 1.2, 0.72, -0.06));   // the arm
+    g.add(b(0.1, 0.2, 0.1, IRON, sx * 1.2, 0.52, 0.2));
+  }
+  g.add(b(0.5, 0.11, 0.03, 0xb08a3a, 0, 0.86, -0.42));         // plaque
+
+  return g;
+}
+
+/**
+ * A flight of stone steps, for the climb up to the lookout.
+ *
+ * The path already ramps up the mesa at a walkable gradient, which is a slope
+ * you happen to be able to get up rather than a way up. These sit on it: a
+ * tread, a nosing, and a cheek either side, so the last of the climb reads as
+ * built.
+ */
+export function makeStair(width = 5.2) {
+  const g = new THREE.Group();
+  const STONE = 0x9c978f, STONE_D = 0x87827b;
+  // Treads run well down into the slope. Drawn thin they sat on it, and where
+  // the ground fell away between steps you could see daylight underneath.
+  g.add(b(width, 0.95, 1.5, STONE, 0, -0.7, 0));
+  g.add(b(width, 0.1, 0.34, STONE_D, 0, 0.25, 0.6));                 // nosing
+  for (const sx of [-1, 1]) {
+    g.add(b(0.38, 1.4, 1.7, STONE_D, sx * (width / 2 - 0.1), -1.0, 0));  // cheeks
+  }
+  return g;
+}
+
+/**
+ * The viewing terrace at the top: paving, a low parapet across the front, and
+ * urns at the corners. The parapet is deliberately low — the whole reason
+ * anyone is up here is to see over it.
+ */
+export function makeTerrace(radius = 9) {
+  const g = new THREE.Group();
+  const PAVE = 0xa8a49b, PAVE_D = 0x938f87, STONE_D = 0x87827b;
+
+  const deck = new THREE.Mesh(
+    new THREE.CylinderGeometry(radius, radius, 0.22, 22),
+    new THREE.MeshLambertMaterial({ color: PAVE })
+  );
+  deck.position.y = -0.09;
+  deck.receiveShadow = true;
+  g.add(deck);
+
+  // Joints, so it reads as slabs rather than a disc of concrete. Each is cut
+  // to the chord of the circle at its own offset — drawn at a fixed length
+  // they shot out past the paving and lay across the grass.
+  const STEP = radius / 3.2;
+  for (let i = -3; i <= 3; i++) {
+    const off = i * STEP;
+    const chord = 2 * Math.sqrt(Math.max(0, radius * radius - off * off)) - 0.25;
+    if (chord <= 0.3) continue;
+    g.add(b(0.08, 0.03, chord, PAVE_D, off, 0.03, 0, { flat: true }));
+    g.add(b(chord, 0.03, 0.08, PAVE_D, 0, 0.03, off, { flat: true }));
+  }
+
+  // A parapet around the front half only: knee-high, so it frames the view
+  // instead of standing in it.
+  for (let a = -62; a <= 62; a += 7) {
+    const ang = (a * Math.PI) / 180;
+    const x = Math.sin(ang) * (radius - 0.5), z = Math.cos(ang) * (radius - 0.5);
+    g.add(b(1.3, 0.62, 0.5, PAVE_D, x, 0, z, { rot: ang }));
+    g.add(b(1.4, 0.14, 0.62, STONE_D, x, 0.62, z, { rot: ang }));
+  }
+
+  return g;
+}
+
+/**
  * A fingerpost at the mouth of a spur, pointing off the main path.
  *
  * The spurs are wide now, but a widened track still doesn't tell you there's

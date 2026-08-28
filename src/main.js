@@ -13,12 +13,14 @@ import { Character, HER, HIM } from './character.js';
 import { Input, Player, FollowCamera } from './controls.js';
 import {
   makeProp, makeHalo, makeGlow, makeFlowerField, makeLamp, makeLightPool, makeLightCone,
-  makeSignpost,
+  makeSignpost, makeStair, makeTerrace, makeLookoutBench,
 } from './props.js';
-import { makeSet, HERO_OFFSET } from './sets.js';
+import { makeSet, mergeFlat, HERO_OFFSET } from './sets.js';
 import { GATE_REQUIREMENT, HER_NAME, TITLE_LINE } from './memories.js';
 import { Sound } from './audio.js';
-import { Ending, SkyCutscene, makeGate, makeFireflies, makeTownLights, makeMeteors } from './ending.js';
+import {
+  Ending, SkyCutscene, makeGate, makeFireflies, makeTownLights, makeMeteors, makeCity,
+} from './ending.js';
 import { makeSky } from './sky.js';
 import { makeWater } from './water.js';
 import { EffectComposer } from '../vendor/addons/postprocessing/EffectComposer.js';
@@ -77,7 +79,7 @@ const horizon = sky.horizon;
 
 // Far enough that the whole island is visible from the lookout — the view
 // down over the valley is the point of standing up there.
-scene.fog = new THREE.Fog(new THREE.Color(0xdcecf4), 130, 400);
+scene.fog = new THREE.Fog(new THREE.Color(0xdcecf4), 130, 460);
 
 const hemi = new THREE.HemisphereLight(0xbfd9ef, 0x6a7560, 1.15);
 scene.add(hemi);
@@ -230,6 +232,31 @@ for (const j of world.junctions) {
   scene.add(post);
 }
 
+// The city the overlook overlooks. Its bearing is taken from the set's own
+// facing — the view is the side away from the path — and the distance is found
+// by walking out until the land runs out, so it always sits on open water
+// rather than inside the next hill.
+let city = null;
+{
+  const look = world.nodes.find((n) => n.id === 'the-bench');
+  if (look) {
+    const dx = -Math.sin(look.facing), dz = -Math.cos(look.facing);
+    let shore = 40;
+    for (let d = 10; d <= 190; d += 4) {
+      const x = look.x + dx * d, z = look.z + dz * d;
+      if (x < 0 || z < 0 || x >= SX || z >= SZ) break;
+      if (world.height[Math.floor(x) + Math.floor(z) * SX] > SEA) shore = d;
+    }
+    // Far enough that it is scenery on the horizon rather than a wall at the
+    // end of the garden. The first attempt sat it seventy blocks past the
+    // shore, where a thirty-storey tower fills half the sky.
+    const out = shore + 175;
+    city = makeCity(look.x + dx * out, look.z + dz * out, SEA - 5,
+      Math.atan2(dx, dz), { width: 320, seed: 11 });
+    scene.add(city.group);
+  }
+}
+
 // --- characters ---------------------------------------------------------
 const her = new Character(HER);
 scene.add(her.root);
@@ -244,21 +271,81 @@ scene.add(him.root);
 // one — the last memory before the gate is the place the ending happens.
 // The bench faces out over the island, because that's the view. Its local +Z
 // is the front, so its rotation is simply the direction they look.
-const viewDir = new THREE.Vector3(
-  SX / 2 - world.lookout.x, 0, SZ / 2 - world.lookout.z
-).normalize();
-const benchFacing = Math.atan2(viewDir.x, viewDir.z);
-
-// Out at the lip of the mesa rather than the middle of it, so what's past
-// them is the drop and the valley instead of more hilltop.
-const benchX = world.lookout.x + 0.5 + viewDir.x * 8;
-const benchZ = world.lookout.z + 0.5 + viewDir.z * 8;
+// The spot and its facing come from the generator, which levelled the ground
+// for them — computing it here as well is how the bench ended up with a leg
+// over a drop.
+const viewDir = new THREE.Vector3(world.benchSpot.view.x, 0, world.benchSpot.view.z);
+const benchFacing = world.benchSpot.facing;
+const benchX = world.benchSpot.x;
+const benchZ = world.benchSpot.z;
 const benchY = LOWPOLY
   ? groundAt(benchX, benchZ)
   : world.grid.columnTop(Math.floor(benchX), Math.floor(benchZ)) + 1;
 const benchPos = new THREE.Vector3(benchX, benchY, benchZ);
 
-const lookoutBench = makeProp('bench');
+// A paved terrace under it, and steps up the last of the climb.
+const terrace = makeTerrace(6.4);
+terrace.position.set(benchX, benchY + 0.01, benchZ);
+terrace.rotation.y = benchFacing;
+scene.add(terrace);
+
+{
+  // Every step in one mesh per colour. There are forty of them and each is
+  // half a dozen boxes, which is a couple of hundred draw calls for a
+  // staircase.
+  const flights = new THREE.Group();
+  for (const st of world.stairs) {
+    const flight = makeStair(5.2);
+    const y = LOWPOLY ? groundAt(st.x, st.z) : st.y + 1;
+    flight.position.set(st.x, y + 0.02, st.z);
+    flight.rotation.y = st.facing;
+    flights.add(flight);
+  }
+  scene.add(mergeFlat(flights));
+}
+
+// Ornamental planting at the top: behind and beside them, never in front.
+// The wedge is the same one the generator keeps clear of trees.
+{
+  const decorate = new THREE.Group();
+  const bloom = [0xf0d3dc, 0xe8b65e, 0xd8b0e0, 0xf1ece2, 0xd45a7a];
+  for (let i = 0; i < 46; i++) {
+    const ang = (i / 46) * Math.PI * 2 + 0.31;
+    const dot = Math.sin(ang) * viewDir.x + Math.cos(ang) * viewDir.z;
+    if (dot > 0.34) continue;                      // in the sightline
+    const r = 10.5 + ((i * 37) % 11) * 0.9;
+    const x = benchX + Math.sin(ang) * r, z = benchZ + Math.cos(ang) * r;
+    const y = LOWPOLY ? groundAt(x, z) : world.grid.columnTop(x, z) + 1;
+    if (i % 5 === 0) {
+      // a small blossom tree, kept short so it never crowds the frame
+      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.22, 2.2, 6),
+        new THREE.MeshLambertMaterial({ color: 0x6b4f36 }));
+      trunk.position.set(x, y + 1.1, z);
+      trunk.castShadow = true;
+      decorate.add(trunk);
+      const crown = new THREE.Mesh(new THREE.IcosahedronGeometry(1.5, 0),
+        new THREE.MeshLambertMaterial({ color: 0xe7c3d2, flatShading: true }));
+      crown.position.set(x, y + 3.0, z);
+      crown.castShadow = true;
+      decorate.add(crown);
+    } else {
+      const bush = new THREE.Mesh(new THREE.IcosahedronGeometry(0.8, 0),
+        new THREE.MeshLambertMaterial({ color: 0x4c8a53, flatShading: true }));
+      bush.position.set(x, y + 0.45, z);
+      bush.castShadow = true;
+      decorate.add(bush);
+      for (let f = 0; f < 3; f++) {
+        const head = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.18, 0.22),
+          new THREE.MeshLambertMaterial({ color: bloom[(i + f) % bloom.length] }));
+        head.position.set(x + (f - 1) * 0.5, y + 1.0, z + ((i + f) % 3 - 1) * 0.4);
+        decorate.add(head);
+      }
+    }
+  }
+  scene.add(mergeFlat(decorate));
+}
+
+const lookoutBench = makeLookoutBench();
 lookoutBench.position.copy(benchPos);
 lookoutBench.rotation.y = benchFacing;
 scene.add(lookoutBench);
@@ -277,8 +364,8 @@ function seatAt(localX, character) {
 
 // He's been sitting there the whole time, which is a nice thing to catch sight
 // of from down on the path long before she gets up there.
-const seatHim = seatAt(-0.4, him);
-const seatHer = seatAt(0.42, her);
+const seatHim = seatAt(-0.55, him);
+const seatHer = seatAt(0.58, her);
 him.root.position.set(seatHim.x, seatHim.y, seatHim.z);
 him.root.rotation.y = benchFacing;
 him.setSitting(true);
@@ -625,6 +712,7 @@ function frame() {
   ui.prompt.hidden = !nearest || noteOpen || journalOpen || ending.locksInput;
   fireflies.update(t, dusk);
   townLights.update(t, dusk);
+  if (city) city.update(dusk);
 
   // Lamp light only really exists once the light goes. A pool on the ground at
   // four in the afternoon reads as a stain; the same pool at dusk reads as a

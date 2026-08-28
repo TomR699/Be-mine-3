@@ -211,6 +211,10 @@ export function generate() {
    * sea. The facing is then simply "back toward the path", so every set opens
    * to the direction she arrives from.
    */
+  // Some sets are about what you can see from them. A viewpoint sited on a
+  // shoulder facing back into the hillside is a railing in front of a bank.
+  const VIEWPOINTS = new Set(['the-bench']);
+
   const sites = new Array(MEMORIES.length);
   const placed = [];
 
@@ -258,12 +262,39 @@ export function generate() {
             const h = height[cx + cz * SX];
             if (h <= SEA + 1) continue;               // not in the water
             if (h > 24) continue;                     // not up the mesa
+            // Nor anywhere near it. The last scene of the game is up there and
+            // it wants an empty hilltop; a gym twenty-five blocks from the
+            // bench is in every frame of it.
+            if (Math.hypot(cx - LOOKOUT.x, cz - LOOKOUT.z) < 52) continue;
+
+            // Normally a set turns its front to the path she arrives from.
+            // A viewpoint is the exception: it turns its back to the best view
+            // it can find and is approached from whichever side suits, because
+            // a railing facing into a bank is not a viewpoint. `openness`
+            // measures how far the land falls away along a bearing.
+            const isView = VIEWPOINTS.has(MEMORIES[i].id);
+            let facing = Math.atan2(px - cx, pz - cz);
+            let openness = 0;
+            if (isView) {
+              for (let a = 0; a < 24; a++) {
+                const bear = (a / 24) * Math.PI * 2;
+                const vx = Math.sin(bear), vz = Math.cos(bear);
+                let open = 0;
+                for (let d = 12; d <= 130; d += 6) {
+                  const qx = Math.round(cx + vx * d), qz = Math.round(cz + vz * d);
+                  if (qx < 0 || qz < 0 || qx >= SX || qz >= SZ) { open += 3; continue; }
+                  const hh = height[qx + qz * SX];
+                  if (hh < h - 2) open += 1;
+                  else if (hh >= h + 2) open -= 3;
+                }
+                if (open > openness) { openness = open; facing = bear + Math.PI; }
+              }
+            }
 
             // The path may not run through the footprint — she'd be walking
             // through the middle of the set. Running close alongside it is
             // only a preference: a set right on the verge is cramped, but it
             // beats one shoved somewhere the island has no room for at all.
-            const facing = Math.atan2(px - cx, pz - cz);
             const cf = Math.cos(facing), sf = Math.sin(facing);
             const VERGE = 5;
             let onPath = 0, alongPath = 0;
@@ -283,6 +314,10 @@ export function generate() {
             };
 
             let score = -roughness(cx, cz, Math.round(radius * 0.6)) * 3;
+
+            // For a viewpoint, the view is most of what makes the site: a
+            // clear outlook and some height to look from.
+            if (isView) score += openness * 2.6 + h * 3;
             score -= Math.abs(d - radius * 1.15) * 1.4;   // sit about a radius out
             score -= Math.abs(sweep) * 0.02;              // prefer square to the path
             // Two sets close enough to overlap read as one confused place —
@@ -524,10 +559,17 @@ export function generate() {
     // anchor, one half-depth out. Stopping a little short of that leaves a
     // gap of ground between the track and the set's own floor, which is what
     // an entrance looks like.
+    // Walk in from the path and stop at the footprint's edge, whichever edge
+    // that turns out to be. Assuming the front works while every set faces the
+    // path, and stops working the moment one doesn't — the viewpoint turns to
+    // face its view, and is approached from the side.
     const ax = px - site.x, az = pz - site.z;
     const al = Math.hypot(ax, az) || 1;
     const ux = ax / al, uz = az / al;
-    const standoff = Math.min(site.halfZ + 1.6, al - 2);
+    let standoff = al - 2;
+    for (let d = 1; d < al; d += 0.5) {
+      if (boxDist(site, site.x + ux * d, site.z + uz * d) >= 1.6) { standoff = d; break; }
+    }
     const endX = site.x + ux * standoff;
     const endZ = site.z + uz * standoff;
 
@@ -662,6 +704,60 @@ export function generate() {
     }
   }
 
+  // The top of the hill, which is where the game ends and so had better be
+  // somewhere. The bench used to be dropped on whatever the noise left there —
+  // flat enough most of the way round and a block short on one side, which is
+  // how it ended up with a leg over a drop.
+  //
+  // The spot is worked out here rather than in main.js so the ground can be
+  // cut for it: a level platform, and a flight of steps up the last of the
+  // climb. Both are exported so the scene builds on the same numbers the
+  // terrain was cut to.
+  const viewX = SX / 2 - LOOKOUT.x, viewZ = SZ / 2 - LOOKOUT.z;
+  const viewL = Math.hypot(viewX, viewZ) || 1;
+  const benchSpot = {
+    x: LOOKOUT.x + 0.5 + (viewX / viewL) * 8,
+    z: LOOKOUT.z + 0.5 + (viewZ / viewL) * 8,
+    facing: Math.atan2(viewX / viewL, viewZ / viewL),
+    view: { x: viewX / viewL, z: viewZ / viewL },
+  };
+  {
+    const bx = Math.round(benchSpot.x), bz = Math.round(benchSpot.z);
+    const target = height[bx + bz * SX];
+    const R = 7.5, EASE = 5;
+    for (let dz = -R - EASE; dz <= R + EASE; dz++) {
+      for (let dx = -R - EASE; dx <= R + EASE; dx++) {
+        const x = bx + dx, z = bz + dz;
+        if (x < 1 || z < 1 || x >= SX - 1 || z >= SZ - 1) continue;
+        const d = Math.hypot(dx, dz);
+        if (d > R + EASE) continue;
+        const k = x + z * SX;
+        if (pathMask[k]) continue;
+        const w = d <= R ? 1 : smooth(1 - (d - R) / EASE);
+        height[k] = Math.round(height[k] * (1 - w) + target * w);
+      }
+    }
+    benchSpot.y = height[bx + bz * SX] + 1;
+  }
+
+  // Steps for the last of the climb, laid on the path wherever it is rising.
+  const stairs = [];
+  {
+    let prev = null;
+    for (let i = gateIndex; i < path.length; i++) {
+      const h = Math.round(pathH[i]);
+      if (prev !== null && h > prev) {
+        const [sx1, sz1] = path[i];
+        const [ax1, az1] = path[Math.min(path.length - 1, i + 2)];
+        stairs.push({
+          x: sx1, z: sz1, y: h,
+          facing: Math.atan2(ax1 - sx1, az1 - sz1),
+        });
+      }
+      prev = h;
+    }
+  }
+
   // Fill columns.
   for (let z = 0; z < SZ; z++) {
     for (let x = 0; x < SX; x++) {
@@ -694,11 +790,19 @@ export function generate() {
       if (sites.some((st) => boxDist(st, x, z) < 2)) continue;
       // Keep the camera's first view clear — a tree at spawn fills the screen.
       const nearSpawn = Math.hypot(x - SPAWN.x, z - SPAWN.z) < 9;
-      // And keep the mesa bare. The last shot of the game looks out over the
-      // island from the bench, and a pine on the shoulder of the hill stands
-      // right in front of it. The bald top is also what makes the lookout read
-      // as a lookout from down on the path.
-      if (Math.hypot(x - LOOKOUT.x, z - LOOKOUT.z) < 34) continue;
+      // The mesa is planted, but not in front of the bench. A bare hilltop was
+      // the blunt way of protecting the last shot of the game; what it wants is
+      // trees behind and beside them and nothing at all in the sightline. So
+      // the exclusion is a wedge, not a circle: everything within sixty degrees
+      // either side of the way they are looking stays clear all the way out,
+      // and there is a clearing around the bench itself.
+      const bdx = x - benchSpot.x, bdz = z - benchSpot.z;
+      const bd = Math.hypot(bdx, bdz);
+      if (bd < 13) continue;
+      if (bd < 90) {
+        const facing2 = (bdx * benchSpot.view.x + bdz * benchSpot.view.z) / (bd || 1);
+        if (facing2 > 0.5) continue;                 // inside the view cone
+      }
       const r = hash2(x, z, 4242);
       const density = fbm(x / 49, z / 49, 777, 2);
       if (r > 0.9715 - density * 0.018) {
@@ -806,7 +910,7 @@ export function generate() {
     const h = grid.columnTop(x, z);
     if (h < SEA) continue;
     // Keep the top clear: a lamp near the bench stands right in the final shot.
-    if (Math.hypot(x - LOOKOUT.x, z - LOOKOUT.z) < 22) continue;
+    if (Math.hypot(x - benchSpot.x, z - benchSpot.z) < 26) continue;
     lamps.push({ x: x + 0.5, y: h + 1, z: z + 0.5 });
   }
 
@@ -845,7 +949,8 @@ export function generate() {
 
   return {
     grid, height, pathMask, spurMask, lamps, nodes, flowers, trees, decor, gate,
-    junctions, cobbles, spawn: SPAWN, lookout: LOOKOUT, heading,
+    junctions, cobbles, stairs, benchSpot,
+    spawn: SPAWN, lookout: LOOKOUT, heading,
   };
 }
 

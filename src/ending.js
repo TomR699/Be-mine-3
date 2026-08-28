@@ -323,6 +323,103 @@ export class SkyCutscene {
 }
 
 /**
+ * A city on the horizon, for the overlook to overlook.
+ *
+ * The viewpoint had a railing, a telescope and a plaque, and nothing in front
+ * of any of it. This is what she is looking at: a skyline far enough out to sit
+ * beyond the island and low enough to read as distance rather than as a wall,
+ * with the scene's own fog doing the work of haze. Windows come on with dusk.
+ *
+ * Placed in the world rather than inside the set, so the direction can be
+ * checked against the terrain — a city dropped blindly at a bearing ends up
+ * buried in the next hill along.
+ */
+export function makeCity(cx, cz, y, facing, { width = 230, seed = 7 } = {}) {
+  const group = new THREE.Group();
+  group.position.set(cx, y, cz);
+  group.rotation.y = facing;
+
+  const rand = (() => {
+    let n = seed * 9301 + 49297;
+    return () => { n = (n * 9301 + 49297) % 233280; return n / 233280; };
+  })();
+
+  const STONE = [0x8fa0b4, 0x9caabb, 0x8494a8, 0xa6b2c0];
+  const positions = [], normals = [], colours = [], lightPts = [];
+  const m = new THREE.Matrix4();
+  const c = new THREE.Color();
+  const box = new THREE.BoxGeometry(1, 1, 1).toNonIndexed();
+  box.computeVertexNormals();
+
+  const add = (w, h, d, x, y2, z, colour) => {
+    m.compose(new THREE.Vector3(x, y2 + h / 2, z), new THREE.Quaternion(),
+      new THREE.Vector3(w, h, d));
+    const gg = box.clone().applyMatrix4(m);
+    const pa = gg.attributes.position.array, na = gg.attributes.normal.array;
+    for (let i = 0; i < pa.length; i += 3) {
+      positions.push(pa[i], pa[i + 1], pa[i + 2]);
+      normals.push(na[i], na[i + 1], na[i + 2]);
+      colours.push(colour.r, colour.g, colour.b);
+    }
+    gg.dispose();
+  };
+
+  // Three ranks of blocks, tallest in the middle, thinning to the edges so it
+  // reads as a town centre with suburbs either side rather than a barricade.
+  for (let rank = 0; rank < 3; rank++) {
+    const depth = rank * 26;
+    const n = 26 - rank * 4;
+    for (let i = 0; i < n; i++) {
+      const t = i / (n - 1) - 0.5;
+      const x = t * width + (rand() - 0.5) * 10;
+      const centreness = 1 - Math.min(1, Math.abs(t) * 2.3);
+      const h = 5 + centreness * (13 + rand() * 17) - rank * 1.5;
+      if (h < 4) continue;
+      const w = 8 + rand() * 13, d = 8 + rand() * 13;
+      c.setHex(STONE[(rand() * STONE.length) | 0]).multiplyScalar(1 - rank * 0.08);
+      add(w, h, d, x, 0, -depth, c);
+      // a lit window band near the top of the taller ones
+      if (h > 13) lightPts.push([x, h * 0.72, -depth + d / 2]);
+      if (h > 20) {                                   // a mast on the tallest
+        c.setHex(0x6f7d8e);
+        add(1.2, 5, 1.2, x, h, -depth, c);
+      }
+    }
+  }
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geo.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(colours, 3));
+  geo.computeBoundingSphere();
+  box.dispose();
+
+  const mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({
+    vertexColors: true, flatShading: true,
+  }));
+  mesh.frustumCulled = false;
+  group.add(mesh);
+
+  // The lights, as points that come up with the evening.
+  const lp = new Float32Array(lightPts.length * 3);
+  lightPts.forEach((q, i) => { lp[i * 3] = q[0]; lp[i * 3 + 1] = q[1]; lp[i * 3 + 2] = q[2]; });
+  const lgeo = new THREE.BufferGeometry();
+  lgeo.setAttribute('position', new THREE.BufferAttribute(lp, 3));
+  const lmat = new THREE.PointsMaterial({
+    color: 0xffd9a0, size: 3.0, transparent: true, opacity: 0,
+    depthWrite: false, blending: THREE.AdditiveBlending, sizeAttenuation: true, fog: false,
+  });
+  const lights = new THREE.Points(lgeo, lmat);
+  lights.frustumCulled = false;
+  group.add(lights);
+
+  return {
+    group,
+    update(dusk) { lmat.opacity = Math.max(0, (dusk - 0.25) / 0.75) * 0.85; },
+  };
+}
+
+/**
  * The gate across the path up to the lookout: two posts and a bar that swings
  * aside. It's a prop with its own collision box rather than terrain, so
  * opening it doesn't mean rebuilding the island.

@@ -9,8 +9,8 @@ import * as THREE from 'three';
  */
 export const HER = {
   skin: 0xe9bb98,
-  hair: 0xc98a52,        // strawberry blonde
-  hairShade: 0xa96f3e,   // the darker under-layer, so it isn't one flat slab
+  hair: 0x6f4230,        // dark brown, with the red only as a warmth in it
+  hairShade: 0x4f2e20,   // the darker under-layer, so it isn't one flat slab
   longHair: true,
   outfit: 0x596069,      // the oversized charcoal hoodie
   outfitShade: 0x474d55,
@@ -24,9 +24,11 @@ export const HER = {
 
 export const HIM = {
   skin: 0xdba97f,
-  hair: 0x2b2018,
-  hairShade: 0x1f1710,
+  hair: 0x3d2b1f,
+  hairShade: 0x2a1d14,
   longHair: false,
+  curtains: true,        // parted in the middle, sweeping either side
+  glasses: 0x33313a,
   outfit: 0x3d5a8c,
   outfitShade: 0x314a76,
   graphic: null,
@@ -36,6 +38,8 @@ export const HIM = {
   shoes: 0x24202c,
   scale: 1.07,
 };
+
+function place(mesh, x, y, z) { mesh.position.set(x, y, z); return mesh; }
 
 function box(w, h, d, color) {
   const mesh = new THREE.Mesh(
@@ -92,9 +96,19 @@ export class Character {
     head.position.y = headH / 2;
     this.head.add(head);
 
+    // The hood first, because the hair has to be built around where it sits.
+    // Bunched at the base of the neck and low enough that the fall of her hair
+    // passes behind it rather than through it.
+    const HOOD_BACK = -torsoD / 2 - 0.17;     // z of the hood's outer face
+    if (palette.hood) {
+      const hood = box(0.6, 0.3, 0.26, palette.outfitShade);
+      hood.position.set(0, legH + torsoH - 0.17, -torsoD / 2 - 0.04);
+      body.add(hood);
+    }
+
     // hair: a cap, a centre part, and — if it's long — a fall down the back
-    const hairTop = box(0.56, 0.2, 0.52, palette.hair);
-    hairTop.position.y = headH - 0.03;
+    const hairTop = box(0.56, 0.2, 0.6, palette.hair);
+    hairTop.position.set(0, headH - 0.03, -0.03);
     this.head.add(hairTop);
 
     for (const s of [-1, 1]) {
@@ -103,23 +117,57 @@ export class Character {
       this.head.add(side);
     }
 
+    if (palette.curtains) {
+      // A centre parting: two flaps angled off the forehead, longer at the
+      // outside than the middle, which is what makes it read as curtains
+      // rather than as a fringe.
+      // Kept above the eyes and swept outward. Hung lower and straighter they
+      // met in the middle and covered his face, which is a fringe over a
+      // curtain rather than a centre parting.
+      for (const s of [-1, 1]) {
+        const flap = box(0.16, 0.26, 0.1, palette.hair);
+        flap.position.set(s * 0.15, headH * 0.82, 0.2);
+        flap.rotation.z = s * 0.5;
+        this.head.add(flap);
+
+        const sweep = box(0.12, 0.3, 0.13, palette.hair);
+        sweep.position.set(s * 0.26, headH * 0.76, 0.12);
+        sweep.rotation.z = s * 0.24;
+        this.head.add(sweep);
+      }
+      // the part itself, a shade darker so the split reads
+      const part = box(0.045, 0.13, 0.1, palette.hairShade);
+      part.position.set(0, headH * 0.95, 0.21);
+      this.head.add(part);
+    }
+
     if (palette.longHair) {
-      // Falls past the shoulders. Hung off the head so it swings when she turns.
-      const back = box(0.54, 0.95, 0.17, palette.hair);
-      back.position.set(0, headH * 0.5 - 0.44, -0.24);
+      // Falls past the shoulders, entirely behind the hood — it used to run
+      // straight through it. Hung off the head so it swings when she turns.
+      const nape = box(0.5, 0.34, 0.13, palette.hair);
+      nape.position.set(0, headH * 0.3, -0.29);
+      this.head.add(nape);
+
+      const back = box(0.54, 0.72, 0.18, palette.hair);
+      const backZ = (palette.hood ? HOOD_BACK - 0.09 : -0.28);
+      back.position.set(0, headH * 0.5 - 0.44, backZ);
       this.head.add(back);
 
-      const under = box(0.46, 0.5, 0.1, palette.hairShade);
-      under.position.set(0, headH * 0.5 - 0.72, -0.2);
+      const under = box(0.46, 0.42, 0.1, palette.hairShade);
+      under.position.set(0, headH * 0.5 - 0.78, backZ + 0.02);
       this.head.add(under);
 
-      // a strand over each shoulder, which is how it sits in the photo
+      // a strand over each shoulder, clear of the chest so it doesn't sink in
       const strand = box(0.12, 0.5, 0.12, palette.hair);
-      strand.position.set(-0.2, headH * 0.5 - 0.4, 0.2);
+      strand.position.set(-0.2, headH * 0.5 - 0.4, 0.29);
       this.head.add(strand);
-    } else {
+    } else if (!palette.curtains) {
       const back = box(0.54, 0.44, 0.14, palette.hair);
       back.position.set(0, headH * 0.5, -0.24);
+      this.head.add(back);
+    } else {
+      const back = box(0.54, 0.3, 0.14, palette.hair);
+      back.position.set(0, headH * 0.42, -0.26);
       this.head.add(back);
     }
 
@@ -129,11 +177,23 @@ export class Character {
       this.head.add(eye);
     }
 
-    if (palette.hood) {
-      // the hood, bunched at the back of the neck
-      const hood = box(0.6, 0.34, 0.26, palette.outfitShade);
-      hood.position.set(0, legH + torsoH - 0.06, -torsoD / 2 - 0.04);
-      body.add(hood);
+    if (palette.glasses) {
+      // Rims, not lenses. Filled boxes over both eyes merge into one dark band
+      // and read as a visor; four thin bars around an open middle read as
+      // spectacles, and you can still see his eyes through them.
+      const eyeY = headH * 0.55, gz = 0.255, t = 0.028;
+      for (const s of [-1, 1]) {
+        const cx = s * 0.12;
+        this.head.add(place(box(0.2, t, 0.03, palette.glasses), cx, eyeY + 0.07, gz));
+        this.head.add(place(box(0.2, t, 0.03, palette.glasses), cx, eyeY - 0.07, gz));
+        this.head.add(place(box(t, 0.15, 0.03, palette.glasses), cx + s * 0.086, eyeY, gz));
+        this.head.add(place(box(t, 0.15, 0.03, palette.glasses), cx - s * 0.086, eyeY, gz));
+
+        const arm = box(0.03, t, 0.22, palette.glasses);
+        arm.position.set(s * 0.235, eyeY + 0.05, 0.15);
+        this.head.add(arm);
+      }
+      this.head.add(place(box(0.07, t, 0.03, palette.glasses), 0, eyeY + 0.045, gz));
     }
 
     // limbs, each hung from a pivot so rotation looks like a joint

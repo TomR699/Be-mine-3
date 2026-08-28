@@ -261,6 +261,15 @@ about 1250 meshes, and a draw call each is what a browser spends its frame on.
 Nothing in a set moves, so `mergeFlat()` bakes each one into one merged
 geometry per colour. Same picture, a third of the draw calls.
 
+**The viewpoint picks its own direction.** Every other set turns its front to
+the path she arrives from; a viewpoint turns its back on the best view it can
+find and is approached from whichever side suits, because a railing facing into
+a bank is not a viewpoint. The generator scores bearings by how far the land
+falls away along them, and the spur ends at whichever edge of the footprint is
+nearest rather than assuming the front. Out past the water there's a city on the
+horizon for it to look at — placed in the world rather than in the set, so the
+bearing can be checked against the terrain first.
+
 **Each checkpoint is a dressed set.** `sets.js` builds the scenery around every
 memory — a tennis court with a net and lines, a gym floor with a squat rack, a
 club frontage with a smoking pen. Each stands on its own floor (decking, paving,
@@ -274,6 +283,19 @@ one lights another lamp and pushes the sky further toward dusk, so the island
 gets warmer and darker the more she remembers.
 
 ## The ending
+
+The last of the climb is a **flight of stone steps**, laid on the path wherever
+it rises, and the top is a **paved terrace** with a knee-high parapet across the
+front — knee-high because the whole reason to be up there is to see over it. The
+generator levels the ground for the bench and hands main.js the spot it cut, so
+the two can't disagree; working the position out separately in both places is
+how the bench ended up with a leg over the drop.
+
+The hilltop is planted, but not in front of them. The exclusion is a wedge
+rather than a circle — blossom trees and flowers behind and beside, nothing at
+all within sixty degrees of the way they are looking. And no memory set may be
+sited within fifty blocks of the lookout: a gym twenty-five blocks from the
+bench is in every frame of the ending.
 
 The lookout is a mesa with cliff sides, so the carved path is the only way up
 and the gate across it genuinely blocks — she cannot simply walk around it. It
@@ -353,7 +375,7 @@ raw shader doesn't inherit the scene's.
 
 ## The night the sky turns
 
-The nine memories sit along the path in chronological order. One of them —
+The memories sit along the path in chronological order. One of them —
 the meteor shower — carries `turns: 'night'`. Before she finds it the world
 only ever reaches late afternoon; opening it eases the sky into night over a
 few seconds and starts the shooting stars, which run for the rest of the game.
@@ -380,8 +402,14 @@ no skip. `SkyCutscene` in `ending.js`.
 `HER_NAME` at the top of `src/memories.js` is on the title card and is still
 `PLACEHOLDER`. `TITLE_LINE` is the line underneath it.
 
+You can edit `src/memories.js` straight on GitHub — open the file, press the
+pencil, commit to this branch, and Pages redeploys in about a minute. It is a
+plain list and the only thing that will break it is a missing quote or comma.
+If you do, say so before I push anything else, or I'll overwrite your words with
+whatever my copy still says.
 
-The nine memories in `src/memories.js` are drafts written from your notes,
+
+The memories in `src/memories.js` are drafts written from your notes,
 with your own phrases kept deliberately. Read them as her and change anything
 that doesn't sound like you.
 

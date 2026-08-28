@@ -562,28 +562,31 @@ const BUILDERS = {
     for (let ix = 0; ix < 6; ix++) {
       g.add(b(0.05, 0.03, 5.4, 0x8b8880, -3.8 + ix * 1.5, 0.04, 0, { flat: true }));
     }
-    g.add(b(9, 0.16, 0.32, 0x8e8a80, 0, 0, 2.6, { flat: true }));       // the edge
+    // The drop is on the far side from the path. It used to be on the near
+    // side, so she arrived at the railing with her back to the view — a
+    // viewpoint you have to climb over to look out of.
+    g.add(b(9, 0.16, 0.32, 0x8e8a80, 0, 0, -2.6, { flat: true }));      // the edge
 
     for (let i = -4; i <= 4; i++) {                                      // railing along the drop
-      g.add(b(0.1, 1.0, 0.1, METAL, i * 1.05, 0, 2.2));
+      g.add(b(0.1, 1.0, 0.1, METAL, i * 1.05, 0, -2.2));
     }
-    g.add(b(8.6, 0.09, 0.09, METAL, 0, 0.95, 2.2));
-    g.add(b(8.6, 0.07, 0.07, METAL, 0, 0.55, 2.2));
+    g.add(b(8.6, 0.09, 0.09, METAL, 0, 0.95, -2.2));
+    g.add(b(8.6, 0.07, 0.07, METAL, 0, 0.55, -2.2));
 
     for (const x of [-3.3, 3.3]) {                                       // two lamps
-      g.add(b(0.18, 2.8, 0.18, METAL, x, 0, -0.9));
-      g.add(b(0.34, 0.12, 0.34, METAL, x, 2.8, -0.9));
-      g.add(b(0.46, 0.5, 0.46, 0xffe0a0, x, 2.9, -0.9, { emissive: 0x6b5216 }));
+      g.add(b(0.18, 2.8, 0.18, METAL, x, 0, 0.9));
+      g.add(b(0.34, 0.12, 0.34, METAL, x, 2.8, 0.9));
+      g.add(b(0.46, 0.5, 0.46, 0xffe0a0, x, 2.9, 0.9, { emissive: 0x6b5216 }));
     }
     g.add(b(0.16, 0.2, 0.16, WHITE, -0.6, 0.56, 0.06));                  // two cups on the arm
     g.add(b(0.16, 0.2, 0.16, WHITE, -0.32, 0.56, 0.06));
     g.add(b(0.5, 0.08, 0.16, 0xb08a3a, 0, 0.62, -0.22));                 // a plaque on the back
 
     g.add(b(0.46, 0.85, 0.46, 0x3c3a44, 2.3, 0, 0.5));                   // bin
-    g.add(b(0.9, 0.7, 0.9, 0x8c5343, -2.4, 0, 1.2));                     // planters
-    g.add(b(0.72, 0.8, 0.72, GREEN, -2.4, 0.7, 1.2));
-    g.add(b(0.9, 0.7, 0.9, 0x8c5343, 2.5, 0, -2.0));
-    g.add(b(0.72, 0.8, 0.72, GREEN, 2.5, 0.7, -2.0));
+    g.add(b(0.9, 0.7, 0.9, 0x8c5343, -2.4, 0, -1.2));                    // planters
+    g.add(b(0.72, 0.8, 0.72, GREEN, -2.4, 0.7, -1.2));
+    g.add(b(0.9, 0.7, 0.9, 0x8c5343, 2.5, 0, 2.0));
+    g.add(b(0.72, 0.8, 0.72, GREEN, 2.5, 0.7, 2.0));
     g.add(b(0.12, 1.9, 0.12, DARK, -3.9, 0, 1.5));                       // a signpost
     g.add(b(0.8, 0.22, 0.05, WOOD, -3.6, 1.6, 1.5));
   },
@@ -822,17 +825,17 @@ const CONTEXT = {
 
   // The overlook: steps, a wall, a viewpoint.
   'the-bench'(g) {
-    for (let i = 0; i < 5; i++) {                                  // steps up to it
-      g.add(b(4.0, 0.22, 0.7, PAVING, 0, -1.1 + i * 0.22, -3.4 - i * 0.7, { flat: true }));
+    for (let i = 0; i < 5; i++) {                                  // steps up from the path
+      g.add(b(4.0, 0.22, 0.7, PAVING, 0, -1.1 + i * 0.22, 3.4 + i * 0.7, { flat: true }));
     }
-    for (let i = 0; i < 22; i++) {                                 // low stone wall
+    for (let i = 0; i < 22; i++) {                                 // low stone wall at the drop
       const t = i / 21, x = -5.5 + t * 11;
-      g.add(b(0.55, 0.8, 0.7, 0x9a978d, x, 0, 2.75));
-      g.add(b(0.6, 0.18, 0.8, 0x8a877d, x, 0.8, 2.75));
+      g.add(b(0.55, 0.8, 0.7, 0x9a978d, x, 0, -2.75));
+      g.add(b(0.6, 0.18, 0.8, 0x8a877d, x, 0.8, -2.75));
     }
-    g.add(b(0.22, 1.3, 0.22, 0x3a3f45, 3.4, 0, 1.9));              // telescope
-    g.add(b(0.6, 0.22, 0.22, 0x2b2f36, 3.4, 1.35, 1.75));
-    g.add(b(1.3, 0.7, 0.1, 0x6b5a3a, -3.6, 1.0, 2.4, { rot: -0.3 })); // viewpoint plaque
+    g.add(b(0.22, 1.3, 0.22, 0x3a3f45, 3.4, 0, -1.9));             // telescope
+    g.add(b(0.6, 0.22, 0.22, 0x2b2f36, 3.4, 1.35, -1.75));
+    g.add(b(1.3, 0.7, 0.1, 0x6b5a3a, -3.6, 1.0, -2.4, { rot: 0.3 })); // viewpoint plaque
     for (const [x, z] of [[-6.6, 0.5], [6.6, -0.5]]) {
       g.add(b(0.9, 0.7, 0.9, 0x8c5343, x, 0, z));
       g.add(b(0.75, 0.9, 0.75, GREEN, x, 0.7, z));
@@ -852,31 +855,107 @@ const CONTEXT = {
     g.add(b(1.6, 2.3, 0.7, 0x6b4a34, -3.6, 0, 1.2));               // wardrobe
     g.add(b(0.08, 0.5, 0.08, GOLD, -3.1, 1.3, 1.56));
 
-    g.add(b(10.6, 3.4, 2.6, 0xb4a08c, 0, 3.0, -5.6));              // rest of the house
-    g.add(b(11.2, 0.45, 3.4, 0x8c5a48, 0, 6.4, -5.4));
-    g.add(floor(13, 4.5, 0x6d8a52, 0.02, 0, 6.4));                 // garden beyond
-    fenceRun(g, -6.5, 8.4, 6.5, 8.4, { h: 1.5, color: 0x7a5638, step: 1.6 });
+    // The rest of the house. This was two flat slabs behind the room, which is
+    // why it looked like scenery flats rather than somewhere anyone lived. It
+    // is a house now: brick, an upper storey over the cutaway, a pitched roof
+    // with eaves and a chimney, a side extension to break the box, and a front
+    // garden with a wall and a gate. The ground floor is opened up like a
+    // doll's house — that is the whole idea of the set — so the storey above
+    // carries the front elevation and short returns hold up its corners.
+    const BRICK = 0xa4796a, BRICK_D = 0x8b6152, RENDER = 0xd8cec4;
+    const ROOF = 0x6a4b46, ROOF_D = 0x573c38, TRIM = 0xefe9e0, GLASS = 0x2f3a44;
+
+    const HW = 5.2, FRONT = 3.5, BACK = -5.2;      // half-width, front, back
+    const GF = 3.0, TOP = 5.9;                     // ground-floor and eaves height
+
+    // ground floor: an outer skin around the room, open at the front
+    g.add(b(HW * 2 + 0.5, GF, 0.4, BRICK, 0, 0, BACK));
+    for (const sx of [-1, 1]) {
+      g.add(b(0.4, GF, FRONT - BACK, BRICK, sx * (HW + 0.05), 0, (FRONT + BACK) / 2));
+      // the cut edge of the front wall, left standing at the corners
+      g.add(b(1.1, GF, 0.4, BRICK, sx * (HW - 0.45), 0, FRONT));
+      g.add(b(1.2, 0.16, 0.5, BRICK_D, sx * (HW - 0.45), GF - 0.16, FRONT));
+    }
+    // a course of lighter brick where the two storeys meet
+    g.add(b(HW * 2 + 0.9, 0.28, FRONT - BACK + 0.6, BRICK_D, 0, GF, (FRONT + BACK) / 2));
+
+    // upper storey, full walls, with windows
+    const UH = TOP - GF - 0.28;
+    g.add(b(HW * 2 + 0.5, UH, 0.4, BRICK, 0, GF + 0.28, BACK));
+    g.add(b(HW * 2 + 0.5, UH, 0.4, BRICK, 0, GF + 0.28, FRONT));
+    for (const sx of [-1, 1]) {
+      g.add(b(0.4, UH, FRONT - BACK, BRICK, sx * (HW + 0.05), GF + 0.28, (FRONT + BACK) / 2));
+    }
+    for (const wx of [-2.6, 0, 2.6]) {
+      g.add(b(1.3, 1.5, 0.12, GLASS, wx, GF + 0.9, FRONT + 0.19));
+      g.add(b(1.5, 0.14, 0.24, TRIM, wx, GF + 0.78, FRONT + 0.2));   // sill
+      g.add(b(1.5, 0.14, 0.24, TRIM, wx, GF + 2.4, FRONT + 0.2));    // lintel
+      g.add(b(0.1, 1.5, 0.14, TRIM, wx, GF + 0.9, FRONT + 0.2));     // glazing bar
+    }
+    // one window lit, because somebody is in
+    g.add(b(1.24, 1.44, 0.06, 0xffdca0, -2.6, GF + 0.93, FRONT + 0.24,
+      { emissive: 0x6e5320, flat: true }));
+
+    // a pitched roof: two slopes to a ridge, overhanging at the eaves
+    const RUN = HW + 0.55, RISE = 1.9;
+    const slope = Math.atan2(RISE, RUN);
+    const len = Math.hypot(RUN, RISE);
+    for (const sz of [-1, 1]) {
+      const pitch = b(HW * 2 + 1.5, 0.3, len * 2, ROOF, 0, 0, 0, { flat: true });
+      pitch.rotation.x = sz * slope;
+      pitch.position.set(0, TOP + RISE / 2, (FRONT + BACK) / 2 + sz * (RUN + 0.55) / 2);
+      g.add(pitch);
+    }
+    g.add(b(HW * 2 + 1.7, 0.3, 0.42, ROOF_D, 0, TOP + RISE - 0.1, (FRONT + BACK) / 2));  // ridge
+    // gable ends, so the roof closes off rather than showing its underside
+    for (const sx of [-1, 1]) {
+      for (let t = 0; t < 5; t++) {
+        const f = t / 5;
+        g.add(b(0.42, RISE / 5 + 0.02, (RUN + 0.55) * 2 * (1 - f), BRICK,
+          sx * (HW + 0.2), TOP + f * RISE, (FRONT + BACK) / 2));
+      }
+    }
+    // chimney
+    g.add(b(1.0, 2.5, 0.9, BRICK_D, -3.2, TOP - 0.4, (FRONT + BACK) / 2 - 0.6));
+    g.add(b(1.2, 0.22, 1.1, ROOF_D, -3.2, TOP + 2.1, (FRONT + BACK) / 2 - 0.6));
+    for (const cx of [-3.45, -3.0]) {
+      g.add(b(0.24, 0.4, 0.24, 0x8a8078, cx, TOP + 2.32, (FRONT + BACK) / 2 - 0.6));
+    }
+
+    // a single-storey extension, so the house isn't one clean box
+    const EX = HW + 0.2;
+    g.add(b(3.4, 2.6, 5.4, RENDER, EX + 1.7, 0, -1.4));
+    g.add(b(3.9, 0.28, 5.9, ROOF_D, EX + 1.7, 2.6, -1.4));
+    g.add(b(1.0, 2.1, 0.14, 0x5c4030, EX + 1.7, 0, 1.35));          // its back door
+    g.add(b(0.11, 0.11, 0.11, GOLD, EX + 2.05, 1.05, 1.45));
+    g.add(b(1.2, 1.1, 0.12, GLASS, EX + 1.7, 1.2, -4.15));
+
+    // the garden it stands in
+    g.add(floor(17, 6.5, 0x6f9455, 0.02, 0, 7.2));
+    g.add(b(4.0, 0.06, 4.6, PAVING, 0, 0.03, 6.2, { flat: true }));   // path to the door
+    g.add(b(8.4, 0.7, 0.5, BRICK_D, 0, 0, 10.1));                     // low front wall
+    g.add(b(8.6, 0.16, 0.66, TRIM, 0, 0.7, 10.1));
+    for (const sx of [-1, 1]) {                                       // gate piers
+      g.add(b(0.6, 1.3, 0.6, BRICK_D, sx * 2.1, 0, 10.1));
+      g.add(b(0.74, 0.14, 0.74, TRIM, sx * 2.1, 1.3, 10.1));
+    }
+    fenceRun(g, -8.4, 10.1, -2.6, 10.1, { h: 1.1, color: 0x5f7a4a, step: 1.2 });
+    fenceRun(g, 2.6, 10.1, 8.4, 10.1, { h: 1.1, color: 0x5f7a4a, step: 1.2 });
+    for (let i = 0; i < 9; i++) {                                     // hedge along the side
+      g.add(b(1.0, 1.2, 1.0, 0x3f6f45, -8.2, 0, 9.4 - i * 1.05));
+    }
+    for (const [tx, tz] of [[6.6, 8.0], [-6.8, 5.6]]) {               // a tree either side
+      g.add(b(0.5, 2.2, 0.5, WOOD, tx, 0, tz));
+      g.add(b(2.6, 1.8, 2.6, 0x3f7a44, tx, 2.0, tz));
+      g.add(b(1.8, 1.2, 1.8, 0x4c8a53, tx, 3.4, tz));
+    }
+    for (const [fx2, fz2, c] of [[3.4, 8.6, PINK], [-3.6, 8.2, GOLD], [4.2, 6.4, 0xd8b0e0],
+                                 [-4.4, 7.4, WHITE], [2.9, 9.6, PINK]]) {
+      g.add(b(0.14, 0.4, 0.14, GREEN, fx2, 0, fz2));
+      g.add(b(0.3, 0.24, 0.3, c, fx2, 0.4, fz2));
+    }
   },
 
-  // Somewhere quiet, at night. Deliberately unspecific — you know where it was.
-  'i-love-you'(g) {
-    g.add(floor(7, 6, PAVING, 0.02, 0, 0));
-    for (let ix = 0; ix < 5; ix++) {
-      g.add(b(0.05, 0.03, 5.9, 0x8b8880, -2.8 + ix * 1.4, 0.04, 0, { flat: true }));
-    }
-    g.add(b(0.2, 3.4, 0.2, 0x3a3f45, 2.4, 0, -1.4));               // a streetlight
-    g.add(b(0.62, 0.26, 0.48, 0xffe6b0, 2.4, 3.3, -1.75, { emissive: 0x6e5320 }));
-    g.add(b(1.9, 0.1, 0.45, WOOD, -1.6, 0.45, 1.4));               // a bench
-    g.add(b(1.9, 0.55, 0.1, WOOD, -1.6, 0.55, 1.18));
-    for (const x of [-2.4, -0.8]) g.add(b(0.12, 0.45, 0.4, DARK, x, 0, 1.4));
-    for (let i = 0; i < 14; i++) {                                 // a low hedge behind
-      g.add(b(0.9, 1.0, 0.9, 0x3f6f45, -5.6 + i * 0.86, 0, -3.2));
-    }
-    for (const [x, z] of [[-4.4, 2.2], [4.2, 1.6]]) {
-      g.add(b(0.7, 0.6, 0.7, 0xa9614a, x, 0, z));
-      g.add(b(0.55, 0.8, 0.55, GREEN, x, 0.6, z));
-    }
-  },
 };
 
 /**
@@ -944,7 +1023,7 @@ function disposeDeep(obj) {
  * merged geometries. Boxes are bucketed by colour, emissive and whether they
  * cast a shadow, so the result looks identical.
  */
-function mergeFlat(root) {
+export function mergeFlat(root) {
   root.updateMatrixWorld(true);
 
   const buckets = new Map();
