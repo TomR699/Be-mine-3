@@ -74,7 +74,18 @@ your graphics driver when the fix was a hard refresh.
 | `Ctrl`+`Shift`+`E` | rehearsal shortcut: find everything and jump to the ending |
 | `Ctrl`+`Shift`+`X` | wipe progress and reload, for a clean hand-over |
 
-`Ctrl`+`Shift`+`X` is handled in `index.html`, not in `main.js`. It used to live
+There are three ways to wipe the save, because a keyboard shortcut turned out
+to be the least reliable of them: **`Ctrl`+`Shift`+`X`**, a **Start over** link
+at the bottom of the journal (click once to arm, again to confirm), and
+**`?reset`** on the end of the URL, which wipes and drops you back on a clean
+page.
+
+The chord can be swallowed before the page ever sees it — Vimium, Grammarly and
+others all claim `Ctrl`+`Shift`+`X` — and when that happens there is nothing to
+debug, because no event arrives. A URL can't be intercepted by anything, and a
+button in the page can't either.
+
+All three are handled in `index.html`, not in `main.js`. It used to live
 in `main.js` with the other keys, which meant that the one time you actually
 needed it — the game failing to start — there was no key handler on the page at
 all and it did nothing. The failure screen also carries a button that does the

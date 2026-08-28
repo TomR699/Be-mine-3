@@ -158,6 +158,19 @@
   button:hover { border-color: var(--accent); color: var(--accent); }
   button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
+  /* Deliberately quiet, and two clicks away from wiping anything: the journal
+     is somewhere she'll open mid-play, and there is exactly one thing in it
+     she must not press by accident. */
+  .startover { margin-top: 1.6rem; text-align: right; }
+  .startover button {
+    font: inherit; font-size: 0.72rem; letter-spacing: 0.06em;
+    text-transform: uppercase; cursor: pointer;
+    background: none; border: 0; padding: 0.3rem 0;
+    color: inherit; opacity: 0.4; text-decoration: underline;
+  }
+  .startover button:hover { opacity: 0.8; }
+  .startover button.arm { opacity: 0.95; color: #e6889a; text-decoration: none; }
+
   #journal h2 {
     font-family: var(--serif);
     font-weight: 400;
@@ -416,6 +429,7 @@
     <h2 id="journal-heading">The journal</h2>
     <ul id="journal-list"></ul>
     <button onclick="document.getElementById('journal').hidden = true">Close</button>
+    <p class="startover"><button id="startover" type="button">Start over</button></p>
   </div>
 </div>
 
@@ -473,7 +487,7 @@
   // The key is repeated here rather than imported, deliberately: the point is
   // that this works when the imports don't.
   var BE_MINE_SAVE = 'be-mine-3.save.v1';
-  var BE_MINE_BUILD = '2026-08-28d';
+  var BE_MINE_BUILD = '2026-08-28e';
 
   // Cache-busting, because there is no build step and GitHub Pages tells the
   // browser it may keep every file for ten minutes. That's fine for a site
@@ -523,15 +537,40 @@
     window.BE_MINE_ENTRY = base + 'src/main.js';
   }());
 
-  function beMineWipe() {
+  function beMineWipe(to) {
     try { localStorage.removeItem(BE_MINE_SAVE); } catch (e) { /* nothing to clear */ }
-    location.reload();
+    if (to) location.replace(to); else location.reload();
+  }
+
+  // ?reset in the address bar wipes the save and drops you back on a clean
+  // page. A keyboard shortcut can be swallowed before the page ever sees it —
+  // Vimium, Grammarly and others all claim Ctrl+Shift+X — and when that
+  // happens there is nothing to debug, because no event arrives. A URL can't
+  // be intercepted by anything.
+  if (/[?&]reset\b/.test(location.search)) {
+    beMineWipe(location.pathname);
   }
   addEventListener('keydown', function (e) {
     if (e.code === 'KeyX' && e.ctrlKey && e.shiftKey) { e.preventDefault(); beMineWipe(); }
   });
   document.addEventListener('DOMContentLoaded', function () {
-    document.getElementById('wipe').addEventListener('click', beMineWipe);
+    document.getElementById('wipe').addEventListener('click', function () { beMineWipe(); });
+
+    // Start over, from inside the journal. Click once to arm it, again to do
+    // it — no confirm dialog, but no single misplaced click either.
+    var over = document.getElementById('startover');
+    var armed = false;
+    over.addEventListener('click', function () {
+      if (armed) { beMineWipe(); return; }
+      armed = true;
+      over.classList.add('arm');
+      over.textContent = 'Erase everything she has found?';
+      setTimeout(function () {
+        armed = false;
+        over.classList.remove('arm');
+        over.textContent = 'Start over';
+      }, 5000);
+    });
     // So we can tell at a glance whether the browser is running the build we
     // think it is, rather than one it kept.
     document.getElementById('build').textContent =
